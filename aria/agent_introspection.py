@@ -123,7 +123,8 @@ class AgentIntrospection:
         
         if not result["model_exists"]:
             result["valid"] = False
-            logger.warning(f"Modelo {model_name} no existe en Odoo")
+            # Solo loguear en nivel debug para evitar spam en logs
+            logger.debug(f"Modelo {model_name} no existe en Odoo")
             return result
         
         # Validar campos

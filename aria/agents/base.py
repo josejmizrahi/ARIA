@@ -638,6 +638,18 @@ class BaseAgent(ABC):
                 validation = introspection.validate_query(model, fields, domain)
                 
                 if not validation["valid"]:
+                    # Si el modelo no existe, retornar lista vacía sin intentar consultar
+                    if not validation.get("model_exists", True):
+                        # Solo loguear una vez por modelo para evitar spam
+                        if not hasattr(self, '_logged_missing_models'):
+                            self._logged_missing_models = set()
+                        if model not in self._logged_missing_models:
+                            self.logger.debug(
+                                f"Modelo {model} no existe en Odoo. Retornando lista vacía."
+                            )
+                            self._logged_missing_models.add(model)
+                        return []
+                    
                     # Usar solo campos válidos
                     valid_fields = [
                         field for field, valid in validation["fields_valid"].items()
@@ -651,10 +663,16 @@ class BaseAgent(ABC):
                         )
                         fields = valid_fields
                     else:
-                        self.logger.error(
-                            f"Modelo {model} no existe o ningún campo es válido. "
-                            f"Campos solicitados: {fields}"
-                        )
+                        # Solo loguear una vez por modelo para evitar spam
+                        if not hasattr(self, '_logged_missing_fields'):
+                            self._logged_missing_fields = set()
+                        model_key = f"{model}:{','.join(sorted(fields))}"
+                        if model_key not in self._logged_missing_fields:
+                            self.logger.warning(
+                                f"Modelo {model} existe pero ningún campo solicitado es válido. "
+                                f"Campos solicitados: {fields}"
+                            )
+                            self._logged_missing_fields.add(model_key)
                         return []
                 
                 # Si hay sugerencias, loguearlas
@@ -667,14 +685,28 @@ class BaseAgent(ABC):
             except Exception as e:
                 self.logger.warning(f"Error en introspección de {model}: {e}. Continuando sin validación.")
         
-        return self.odoo.search_read(
-            model,
-            domain or [],
-            fields=fields,
-            offset=offset,
-            limit=limit,
-            order=order
-        )
+        # Ejecutar consulta con manejo de errores mejorado
+        try:
+            return self.odoo.search_read(
+                model,
+                domain or [],
+                fields=fields,
+                offset=offset,
+                limit=limit,
+                order=order
+            )
+        except Exception as e:
+            # Si el error es que el modelo no existe y ya lo validamos, solo retornar vacío
+            error_str = str(e).lower()
+            if "doesn't exist" in error_str or "no existe" in error_str:
+                if not hasattr(self, '_logged_missing_models'):
+                    self._logged_missing_models = set()
+                if model not in self._logged_missing_models:
+                    self.logger.debug(f"Modelo {model} no existe en Odoo (confirmado por error). Retornando lista vacía.")
+                    self._logged_missing_models.add(model)
+                return []
+            # Para otros errores, relanzar
+            raise
     
     def search_count(self, model: str, domain: Optional[list] = None) -> int:
         """Cuenta registros en Odoo."""
