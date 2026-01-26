@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
+from typing import Optional
 
 from aria import __version__
 from aria.agents import initialize_all_agents
@@ -509,6 +510,73 @@ async def finance_forecast():
         }
     except Exception as e:
         logger.error(f"Error ejecutando proyecciones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/budgets", tags=["Finance"])
+async def get_budgets():
+    """Obtiene presupuestos actuales desde todas las fuentes."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        from aria.budget_manager import get_budget_manager
+        from aria.config import settings
+        
+        budget_manager = get_budget_manager(settings.odoo.company_id)
+        budgets = budget_manager.get_budgets(agent.odoo)
+        
+        return {
+            "budgets": budgets,
+            "monthly_revenue": budgets.get("monthly_revenue", 0),
+            "monthly_expenses": budgets.get("monthly_expenses", 0),
+            "by_category": budgets.get("by_category", {}),
+            "source": budgets.get("source", "unknown"),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo presupuestos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class BudgetUpdate(BaseModel):
+    """Request para actualizar presupuestos."""
+    monthly_revenue: Optional[float] = None
+    monthly_expenses: Optional[float] = None
+    by_category: Optional[dict[str, float]] = None
+
+
+@app.post("/api/finance/budgets", tags=["Finance"])
+async def update_budgets(budget_update: BudgetUpdate):
+    """Actualiza presupuestos manualmente (se guardan en archivo JSON)."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        from aria.budget_manager import get_budget_manager
+        from aria.config import settings
+        
+        budget_manager = get_budget_manager(settings.odoo.company_id)
+        
+        updated = budget_manager.set_budgets(
+            monthly_revenue=budget_update.monthly_revenue,
+            monthly_expenses=budget_update.monthly_expenses,
+            by_category=budget_update.by_category,
+        )
+        
+        # Invalidar cache del agente
+        agent._budgets_cache = None
+        
+        return {
+            "success": True,
+            "budgets": updated,
+            "message": "Presupuestos actualizados correctamente",
+        }
+    except Exception as e:
+        logger.error(f"Error actualizando presupuestos: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

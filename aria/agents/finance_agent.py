@@ -53,11 +53,46 @@ class FinanceAgent(BaseAgent):
         self.warning_runway_days = 14  # Días de advertencia
         self.projection_weeks = 4  # Semanas de proyección
         
-        # Configuración de presupuestos desde settings
-        self.monthly_budget = settings.finance_budget.monthly_revenue
-        self.monthly_expenses_budget = settings.finance_budget.monthly_expenses
-        self.annual_budget = self.monthly_budget * 12
-        self.category_budgets = settings.finance_budget.get_category_budgets()
+        # Gestor de presupuestos (se carga dinámicamente desde Odoo/archivo/cálculo)
+        self._budget_manager = None
+        self._budgets_cache: Optional[dict] = None
+    
+    @property
+    def budget_manager(self):
+        """Obtiene el gestor de presupuestos."""
+        if self._budget_manager is None:
+            from aria.budget_manager import get_budget_manager
+            self._budget_manager = get_budget_manager(self.company_id)
+        return self._budget_manager
+    
+    def _get_budgets(self) -> dict:
+        """Obtiene presupuestos desde la mejor fuente disponible."""
+        if self._budgets_cache is None:
+            self._budgets_cache = self.budget_manager.get_budgets(self.odoo)
+        return self._budgets_cache
+    
+    @property
+    def monthly_budget(self) -> float:
+        """Presupuesto mensual de ingresos."""
+        budgets = self._get_budgets()
+        return budgets.get("monthly_revenue", 0)
+    
+    @property
+    def monthly_expenses_budget(self) -> float:
+        """Presupuesto mensual de gastos."""
+        budgets = self._get_budgets()
+        return budgets.get("monthly_expenses", 0)
+    
+    @property
+    def annual_budget(self) -> float:
+        """Presupuesto anual de ingresos."""
+        return self.monthly_budget * 12
+    
+    @property
+    def category_budgets(self) -> dict[str, float]:
+        """Presupuestos por categoría."""
+        budgets = self._get_budgets()
+        return budgets.get("by_category", {})
     
     def _register_tasks(self) -> None:
         """Registra las tareas del agente de finanzas."""
@@ -1336,6 +1371,7 @@ Variación: {expense_variance_pct:.1f}%
                 "expenses_by_category": expenses_by_category,
                 "revenue_by_product": revenue_by_product,
                 "budget_comparison": budget_comparison,
+                "budget_source": self._get_budgets().get("source", "unknown"),
             }
         )
     

@@ -9,7 +9,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Wallet,
-  Calculator
+  Calculator,
+  Settings,
+  Save,
+  X
 } from 'lucide-react'
 
 const API_BASE = '/api'
@@ -154,14 +157,165 @@ function BudgetComparison({ data }) {
   )
 }
 
+// Budget Configuration Component
+function BudgetConfig({ budgets, onSave, onCancel }) {
+  const [monthlyRevenue, setMonthlyRevenue] = useState(budgets?.monthly_revenue || 0)
+  const [monthlyExpenses, setMonthlyExpenses] = useState(budgets?.monthly_expenses || 0)
+  const [categories, setCategories] = useState(budgets?.by_category || {})
+  const [newCategory, setNewCategory] = useState({ name: '', amount: '' })
+  const [saving, setSaving] = useState(false)
+  
+  const handleAddCategory = () => {
+    if (newCategory.name && newCategory.amount) {
+      setCategories({
+        ...categories,
+        [newCategory.name]: parseFloat(newCategory.amount)
+      })
+      setNewCategory({ name: '', amount: '' })
+    }
+  }
+  
+  const handleRemoveCategory = (name) => {
+    const updated = { ...categories }
+    delete updated[name]
+    setCategories(updated)
+  }
+  
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave({
+        monthly_revenue: monthlyRevenue,
+        monthly_expenses: monthlyExpenses,
+        by_category: categories
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+  
+  return (
+    <div className="glass rounded-xl p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Settings className="w-5 h-5 text-aria-500" />
+          Configurar Presupuestos
+        </h3>
+        <div className="flex gap-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <X className="w-4 h-4" />
+            Cancelar
+          </button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-surface-400 mb-2">
+            Presupuesto Mensual de Ingresos
+          </label>
+          <input
+            type="number"
+            value={monthlyRevenue}
+            onChange={(e) => setMonthlyRevenue(parseFloat(e.target.value) || 0)}
+            className="w-full px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
+            placeholder="0"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-surface-400 mb-2">
+            Presupuesto Mensual de Gastos
+          </label>
+          <input
+            type="number"
+            value={monthlyExpenses}
+            onChange={(e) => setMonthlyExpenses(parseFloat(e.target.value) || 0)}
+            className="w-full px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
+            placeholder="0"
+          />
+        </div>
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-surface-400 mb-2">
+          Presupuestos por Categoría
+        </label>
+        
+        <div className="space-y-2 mb-4">
+          {Object.entries(categories).map(([name, amount]) => (
+            <div key={name} className="flex items-center gap-2 p-2 bg-surface-900 rounded-lg">
+              <span className="flex-1 font-medium">{name}</span>
+              <span className="font-mono">{formatCurrency(amount)}</span>
+              <button
+                onClick={() => handleRemoveCategory(name)}
+                className="p-1 text-red-400 hover:text-red-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newCategory.name}
+            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+            placeholder="Nombre de categoría"
+            className="flex-1 px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg"
+          />
+          <input
+            type="number"
+            value={newCategory.amount}
+            onChange={(e) => setNewCategory({ ...newCategory, amount: e.target.value })}
+            placeholder="Monto"
+            className="w-32 px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
+          />
+          <button
+            onClick={handleAddCategory}
+            className="px-4 py-2 bg-aria-600 hover:bg-aria-700 rounded-lg transition-colors"
+          >
+            Agregar
+          </button>
+        </div>
+      </div>
+      
+      {budgets?.source && (
+        <div className="pt-4 border-t border-surface-800">
+          <p className="text-sm text-surface-500">
+            Fuente actual: <span className="font-medium capitalize">{budgets.source}</span>
+            {budgets.source === 'odoo' && budgets.name && (
+              <span className="ml-2">({budgets.name})</span>
+            )}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function FinanceDashboard() {
   const [summary, setSummary] = useState(null)
   const [ratios, setRatios] = useState(null)
   const [budget, setBudget] = useState(null)
   const [profitability, setProfitability] = useState(null)
   const [forecast, setForecast] = useState(null)
+  const [budgets, setBudgets] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [showBudgetConfig, setShowBudgetConfig] = useState(false)
   
   useEffect(() => {
     fetchFinanceData()
@@ -171,12 +325,13 @@ export default function FinanceDashboard() {
   
   const fetchFinanceData = async () => {
     try {
-      const [summaryRes, ratiosRes, budgetRes, profitabilityRes, forecastRes] = await Promise.all([
+      const [summaryRes, ratiosRes, budgetRes, profitabilityRes, forecastRes, budgetsRes] = await Promise.all([
         fetch(`${API_BASE}/agents/finanzas/summary`),
         fetch(`${API_BASE}/finance/ratios`).catch(() => null),
         fetch(`${API_BASE}/finance/budget`).catch(() => null),
         fetch(`${API_BASE}/finance/profitability`).catch(() => null),
         fetch(`${API_BASE}/finance/forecast`).catch(() => null),
+        fetch(`${API_BASE}/finance/budgets`).catch(() => null),
       ])
       
       if (summaryRes.ok) {
@@ -203,10 +358,38 @@ export default function FinanceDashboard() {
         const forecastData = await forecastRes.json()
         setForecast(forecastData.data)
       }
+      
+      if (budgetsRes?.ok) {
+        const budgetsData = await budgetsRes.json()
+        setBudgets(budgetsData.budgets)
+      }
     } catch (err) {
       console.error('Error fetching finance data:', err)
     } finally {
       setLoading(false)
+    }
+  }
+  
+  const handleSaveBudgets = async (budgetData) => {
+    try {
+      const response = await fetch(`${API_BASE}/finance/budgets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(budgetData)
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        setBudgets(result.budgets)
+        setShowBudgetConfig(false)
+        // Recargar datos
+        fetchFinanceData()
+      } else {
+        alert('Error guardando presupuestos')
+      }
+    } catch (err) {
+      console.error('Error saving budgets:', err)
+      alert('Error guardando presupuestos')
     }
   }
   
@@ -240,7 +423,23 @@ export default function FinanceDashboard() {
           </h1>
           <p className="text-surface-500 text-sm mt-1">Análisis financiero profesional y métricas avanzadas</p>
         </div>
+        <button
+          onClick={() => setShowBudgetConfig(!showBudgetConfig)}
+          className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+          {showBudgetConfig ? 'Ocultar Configuración' : 'Configurar Presupuestos'}
+        </button>
       </div>
+      
+      {/* Budget Configuration */}
+      {showBudgetConfig && budgets && (
+        <BudgetConfig
+          budgets={budgets}
+          onSave={handleSaveBudgets}
+          onCancel={() => setShowBudgetConfig(false)}
+        />
+      )}
       
       {/* Tabs */}
       <div className="flex gap-2 border-b border-surface-800">
@@ -351,6 +550,31 @@ export default function FinanceDashboard() {
       {/* Budget Tab */}
       {activeTab === 'budget' && budget && (
         <div className="space-y-6">
+          {budgets && (
+            <div className="glass rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Presupuestos Configurados</h3>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  budgets.source === 'odoo' ? 'bg-blue-500/20 text-blue-400' :
+                  budgets.source === 'manual' ? 'bg-emerald-500/20 text-emerald-400' :
+                  'bg-amber-500/20 text-amber-400'
+                }`}>
+                  Fuente: {budgets.source === 'odoo' ? 'Odoo' : budgets.source === 'manual' ? 'Manual' : 'Calculado'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-surface-400 mb-1">Ingresos Mensuales</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_revenue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-surface-400 mb-1">Gastos Mensuales</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_expenses)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <BudgetComparison data={budget} />
           
           {budget.projected_revenue && (
