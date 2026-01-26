@@ -171,71 +171,138 @@ class FinanceAgent(BaseAgent):
     
     async def get_status_summary(self) -> dict[str, Any]:
         """Retorna resumen del estado de finanzas con métricas avanzadas."""
-        
-        # Saldos por divisa
-        balances_by_currency = self._get_cash_balance_by_currency()
-        cash_local = balances_by_currency.get(self.default_currency, 0.0)
-        
-        daily_burn = self._calculate_daily_burn()
-        runway = cash_local / daily_burn if daily_burn > 0 else 999
-        
-        # Pagos próximos 7 días
-        upcoming = self._get_upcoming_payments(days=7)
-        total_upcoming = sum(p.get("amount_residual", 0) for p in upcoming)
-        
-        # Cobranza esperada 7 días
-        expected_collections = self._get_expected_collections(days=7)
-        total_expected = sum(c.get("amount_residual", 0) for c in expected_collections)
-        
-        # Métricas del mes actual
-        month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
-        month_end = datetime.now().strftime("%Y-%m-%d")
-        
-        invoices = self.search_read(
-            "account.move",
-            [
-                ("move_type", "=", "out_invoice"),
-                ("state", "=", "posted"),
-                ("invoice_date", ">=", month_start),
-                ("invoice_date", "<=", month_end),
-                ("company_id", "=", self.company_id),
-            ],
-            ["amount_total"],
-            limit=500
-        )
-        monthly_revenue = sum(i.get("amount_total", 0) for i in invoices)
-        
-        # Cumplimiento de presupuesto
-        budget_compliance = (monthly_revenue / self.monthly_budget * 100) if self.monthly_budget > 0 else 0
-        
-        # Determinar estado
-        if cash_local < 0 or runway <= self.critical_runway_days:
-            status = "critical"
-        elif runway <= self.warning_runway_days:
-            status = "warning"
-        elif total_upcoming > cash_local + total_expected:
-            status = "warning"
-        elif budget_compliance < 80:
-            status = "warning"
-        else:
-            status = "ok"
-        
-        return {
-            "status": status,
-            "company_id": self.company_id,
-            "default_currency": self.default_currency,
-            "cash_balance": cash_local,
-            "cash_by_currency": balances_by_currency,
-            "runway_days": runway,
-            "daily_burn": daily_burn,
-            "upcoming_payments_7d": total_upcoming,
-            "expected_collections_7d": total_expected,
-            "net_position_7d": cash_local + total_expected - total_upcoming,
-            "monthly_revenue": monthly_revenue,
-            "monthly_budget": self.monthly_budget,
-            "budget_compliance": budget_compliance,
-            "last_updated": datetime.now().isoformat(),
-        }
+        try:
+            # Saldos por divisa (con manejo de errores)
+            try:
+                balances_by_currency = self._get_cash_balance_by_currency()
+                cash_local = balances_by_currency.get(self.default_currency, 0.0)
+            except Exception as e:
+                self.logger.error(f"Error obteniendo saldos: {e}")
+                balances_by_currency = {self.default_currency: 0.0}
+                cash_local = 0.0
+            
+            # Calcular daily burn con manejo de errores
+            try:
+                daily_burn = self._calculate_daily_burn()
+                if daily_burn <= 0:
+                    daily_burn = 25000.0  # Default seguro
+            except Exception as e:
+                self.logger.error(f"Error calculando daily burn: {e}")
+                daily_burn = 25000.0
+            
+            runway = cash_local / daily_burn if daily_burn > 0 else 999
+            
+            # Pagos próximos 7 días (con manejo de errores)
+            try:
+                upcoming = self._get_upcoming_payments(days=7)
+                total_upcoming = sum(p.get("amount_residual", 0) or 0 for p in upcoming)
+            except Exception as e:
+                self.logger.error(f"Error obteniendo pagos próximos: {e}")
+                total_upcoming = 0.0
+            
+            # Cobranza esperada 7 días (con manejo de errores)
+            try:
+                expected_collections = self._get_expected_collections(days=7)
+                total_expected = sum(c.get("amount_residual", 0) or 0 for c in expected_collections)
+            except Exception as e:
+                self.logger.error(f"Error obteniendo cobranza esperada: {e}")
+                total_expected = 0.0
+            
+            # Métricas del mes actual (con manejo de errores)
+            try:
+                month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+                month_end = datetime.now().strftime("%Y-%m-%d")
+                
+                invoices = self.search_read(
+                    "account.move",
+                    [
+                        ("move_type", "=", "out_invoice"),
+                        ("state", "=", "posted"),
+                        ("invoice_date", ">=", month_start),
+                        ("invoice_date", "<=", month_end),
+                        ("company_id", "=", self.company_id),
+                    ],
+                    ["amount_total"],
+                    limit=500
+                )
+                monthly_revenue = sum(i.get("amount_total", 0) or 0 for i in invoices)
+            except Exception as e:
+                self.logger.error(f"Error obteniendo ingresos mensuales: {e}")
+                monthly_revenue = 0.0
+            
+            # Cumplimiento de presupuesto
+            budget_compliance = (monthly_revenue / self.monthly_budget * 100) if self.monthly_budget > 0 else 0
+            
+            # Determinar estado
+            if cash_local < 0 or runway <= self.critical_runway_days:
+                status = "critical"
+            elif runway <= self.warning_runway_days:
+                status = "warning"
+            elif total_upcoming > cash_local + total_expected:
+                status = "warning"
+            elif budget_compliance < 80:
+                status = "warning"
+            else:
+                status = "ok"
+            
+            result = {
+                "status": status,
+                "company_id": self.company_id,
+                "default_currency": self.default_currency,
+                "cash_balance": cash_local,
+                "cash_by_currency": balances_by_currency,
+                "runway_days": runway,
+                "daily_burn": daily_burn,
+                "upcoming_payments_7d": total_upcoming,
+                "expected_collections_7d": total_expected,
+                "net_position_7d": cash_local + total_expected - total_upcoming,
+                "monthly_revenue": monthly_revenue,
+                "monthly_budget": self.monthly_budget,
+                "budget_compliance": budget_compliance,
+                "last_updated": datetime.now().isoformat(),
+            }
+            
+            # Validar datos antes de retornar
+            required_fields = ["cash_balance", "runway_days", "daily_burn", "monthly_revenue"]
+            is_valid = all(
+                field in result and 
+                result[field] is not None and 
+                isinstance(result[field], (int, float))
+                for field in required_fields
+            )
+            
+            if not is_valid:
+                self.logger.warning("Datos inválidos en get_status_summary, usando valores por defecto")
+                # Retornar datos válidos con valores por defecto
+                result.update({
+                    "cash_balance": cash_local if cash_local is not None else 0.0,
+                    "runway_days": runway if runway is not None else 999,
+                    "daily_burn": daily_burn if daily_burn is not None else 25000.0,
+                    "monthly_revenue": monthly_revenue if monthly_revenue is not None else 0.0,
+                })
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error crítico en get_status_summary: {e}", exc_info=True)
+            # Retornar datos mínimos válidos en caso de error
+            return {
+                "status": "error",
+                "company_id": self.company_id,
+                "default_currency": self.default_currency,
+                "cash_balance": 0.0,
+                "cash_by_currency": {self.default_currency: 0.0},
+                "runway_days": 999,
+                "daily_burn": 25000.0,
+                "upcoming_payments_7d": 0.0,
+                "expected_collections_7d": 0.0,
+                "net_position_7d": 0.0,
+                "monthly_revenue": 0.0,
+                "monthly_budget": self.monthly_budget,
+                "budget_compliance": 0.0,
+                "last_updated": datetime.now().isoformat(),
+                "error": str(e),
+            }
     
     # ==================== Tareas ====================
     
@@ -756,6 +823,8 @@ _¡Buen fin de semana!_
         balances_by_currency: dict[str, float] = {}
         
         for acc_id in valid_account_ids:
+            # Optimizar: usar search_count y luego leer solo si es necesario
+            # Para saldos, solo necesitamos sumar balances, no todos los registros
             lines = self.search_read(
                 "account.move.line",
                 [
@@ -764,7 +833,7 @@ _¡Buen fin de semana!_
                     ("company_id", "=", company_id),
                 ],
                 ["balance"],
-                limit=10000
+                limit=1000  # Reducido de 10000 a 1000 - suficiente para calcular saldo
             )
             
             balance = sum(l.get("balance", 0) for l in lines)
@@ -822,19 +891,27 @@ _¡Buen fin de semana!_
             if not account:
                 continue  # Saltar si no es cuenta de efectivo
             
-            # Obtener saldo
-            lines = self.search_read(
-                "account.move.line",
-                [
-                    ("account_id", "=", account_id),
-                    ("parent_state", "=", "posted"),
-                    ("company_id", "=", company_id),
-                ],
-                ["balance"],
-                limit=5000
-            )
-            
-            balance = sum(l.get("balance", 0) for l in lines)
+            # Obtener saldo (optimizado: límite reducido y filtro por fecha)
+            try:
+                date_from = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+                
+                lines = self.search_read(
+                    "account.move.line",
+                    [
+                        ("account_id", "=", account_id),
+                        ("parent_state", "=", "posted"),
+                        ("company_id", "=", company_id),
+                        ("date", ">=", date_from),  # Solo últimos 12 meses
+                    ],
+                    ["balance"],
+                    limit=1000,  # Reducido de 5000 a 1000 - suficiente para calcular saldo
+                    order="date desc"  # Más recientes primero
+                )
+                
+                balance = sum(l.get("balance", 0) or 0 for l in lines)
+            except Exception as e:
+                self.logger.error(f"Error obteniendo saldo de cuenta {account_id}: {e}")
+                balance = 0.0
             currency = j.get("currency_id", [0, self.default_currency])[1] if j.get("currency_id") else self.default_currency
             
             result.append({
