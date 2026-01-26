@@ -53,9 +53,11 @@ class FinanceAgent(BaseAgent):
         self.warning_runway_days = 14  # Días de advertencia
         self.projection_weeks = 4  # Semanas de proyección
         
-        # Configuración de presupuestos (configurable desde settings o .env)
-        self.monthly_budget = 24_500_000  # Presupuesto mensual por defecto
-        self.annual_budget = self.monthly_budget * 12  # Presupuesto anual
+        # Configuración de presupuestos desde settings
+        self.monthly_budget = settings.finance_budget.monthly_revenue
+        self.monthly_expenses_budget = settings.finance_budget.monthly_expenses
+        self.annual_budget = self.monthly_budget * 12
+        self.category_budgets = settings.finance_budget.get_category_budgets()
     
     def _register_tasks(self) -> None:
         """Registra las tareas del agente de finanzas."""
@@ -1026,7 +1028,7 @@ Gastos: {self.format_currency(current_month.get('expenses', 0))}
         
         # Presupuesto esperado hasta la fecha
         expected_revenue = self.monthly_budget * (progress_pct / 100)
-        expected_expenses = (self.monthly_budget * 0.7) * (progress_pct / 100)  # Asumiendo 70% gastos
+        expected_expenses = self.monthly_expenses_budget * (progress_pct / 100)
         
         # Variaciones
         revenue_variance = actual_revenue - expected_revenue
@@ -1131,7 +1133,7 @@ Variación: {expense_variance_pct:.1f}%
         )
     
     async def analyze_profitability(self) -> TaskResult:
-        """Análisis de rentabilidad por centro de costo."""
+        """Análisis de rentabilidad por centro de costo y producto/servicio."""
         started_at = datetime.now()
         
         self.logger.info("Analizando rentabilidad...")
@@ -1150,45 +1152,113 @@ Variación: {expense_variance_pct:.1f}%
                 ("invoice_date", "<=", month_end),
                 ("company_id", "=", self.company_id),
             ],
-            ["amount_total"],
+            ["amount_total", "invoice_line_ids"],
             limit=1000
         )
         total_revenue = sum(i.get("amount_total", 0) for i in invoices)
         
-        # Gastos por categoría (usando cuentas contables)
-        # Buscar cuentas de gastos
-        expense_accounts = self.search_read(
-            "account.account",
-            [
-                ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
-                ("company_id", "=", self.company_id),
-            ],
-            ["id", "name", "code"],
-            limit=50
-        )
+        # Análisis por producto/servicio (si hay líneas de factura)
+        revenue_by_product = {}
+        if invoices:
+            # Obtener líneas de factura con productos
+            for invoice in invoices[:50]:  # Limitar para performance
+                invoice_lines = self.search_read(
+                    "account.move.line",
+                    [
+                        ("move_id", "=", invoice["id"]),
+                        ("product_id", "!=", False),
+                    ],
+                    ["product_id", "price_subtotal"],
+                    limit=100
+                )
+                
+                for line in invoice_lines:
+                    product_id = line.get("product_id")
+                    if product_id:
+                        product_name = product_id[1] if isinstance(product_id, list) else "Sin nombre"
+                        amount = line.get("price_subtotal", 0)
+                        if product_name not in revenue_by_product:
+                            revenue_by_product[product_name] = 0
+                        revenue_by_product[product_name] += amount
         
+        # Análisis por categoría usando cuentas analíticas (si existen)
         expenses_by_category = {}
-        for account in expense_accounts:
-            account_id = account["id"]
-            account_name = account.get("name", "Sin nombre")
-            
-            # Movimientos del mes
-            lines = self.search_read(
-                "account.move.line",
+        revenue_by_category = {}
+        
+        # Intentar usar cuentas analíticas primero
+        if self._model_exists("account.analytic.line"):
+            analytic_lines = self.search_read(
+                "account.analytic.line",
                 [
-                    ("account_id", "=", account_id),
-                    ("parent_state", "=", "posted"),
                     ("date", ">=", month_start),
                     ("date", "<=", month_end),
                     ("company_id", "=", self.company_id),
                 ],
-                ["balance"],
-                limit=1000
+                ["account_id", "amount", "account_id"],
+                limit=500
             )
             
-            total = abs(sum(l.get("balance", 0) for l in lines))
-            if total > 0:
-                expenses_by_category[account_name] = total
+            for line in analytic_lines:
+                account_id = line.get("account_id")
+                if account_id:
+                    account_name = account_id[1] if isinstance(account_id, list) else "Sin nombre"
+                    amount = abs(line.get("amount", 0))
+                    
+                    if amount < 0:  # Gastos
+                        if account_name not in expenses_by_category:
+                            expenses_by_category[account_name] = 0
+                        expenses_by_category[account_name] += amount
+                    else:  # Ingresos
+                        if account_name not in revenue_by_category:
+                            revenue_by_category[account_name] = 0
+                        revenue_by_category[account_name] += amount
+        
+        # Si no hay cuentas analíticas, usar cuentas contables
+        if not expenses_by_category:
+            expense_accounts = self.search_read(
+                "account.account",
+                [
+                    ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["id", "name", "code"],
+                limit=50
+            )
+            
+            for account in expense_accounts:
+                account_id = account["id"]
+                account_name = account.get("name", "Sin nombre")
+                
+                lines = self.search_read(
+                    "account.move.line",
+                    [
+                        ("account_id", "=", account_id),
+                        ("parent_state", "=", "posted"),
+                        ("date", ">=", month_start),
+                        ("date", "<=", month_end),
+                        ("company_id", "=", self.company_id),
+                    ],
+                    ["balance"],
+                    limit=1000
+                )
+                
+                total = abs(sum(l.get("balance", 0) for l in lines))
+                if total > 0:
+                    expenses_by_category[account_name] = total
+        
+        # Comparar con presupuestos por categoría si están configurados
+        budget_comparison = {}
+        if self.category_budgets:
+            for category, budget_amount in self.category_budgets.items():
+                actual = expenses_by_category.get(category, 0)
+                variance = actual - budget_amount
+                variance_pct = (variance / budget_amount * 100) if budget_amount > 0 else 0
+                budget_comparison[category] = {
+                    "budget": budget_amount,
+                    "actual": actual,
+                    "variance": variance,
+                    "variance_pct": variance_pct,
+                }
         
         # Calcular margen de contribución
         total_expenses = sum(expenses_by_category.values())
@@ -1196,10 +1266,9 @@ Variación: {expense_variance_pct:.1f}%
         margin_pct = (contribution_margin / total_revenue * 100) if total_revenue > 0 else 0
         
         # Punto de equilibrio (simplificado)
-        # Asumiendo gastos fijos = 70% de gastos totales
         fixed_costs = total_expenses * 0.7
         variable_costs = total_expenses * 0.3
-        break_even = fixed_costs / (1 - (variable_costs / total_revenue)) if total_revenue > 0 else 0
+        break_even = fixed_costs / (1 - (variable_costs / total_revenue)) if total_revenue > 0 and variable_costs < total_revenue else 0
         
         message = f"""
 *📈 Análisis de Rentabilidad*
@@ -1217,13 +1286,34 @@ Variación: {expense_variance_pct:.1f}%
         sorted_expenses = sorted(expenses_by_category.items(), key=lambda x: x[1], reverse=True)[:10]
         for category, amount in sorted_expenses:
             pct = (amount / total_expenses * 100) if total_expenses > 0 else 0
-            message += f"\n• {category[:30]}: {self.format_currency(amount)} ({pct:.1f}%)"
+            budget_info = ""
+            if category in budget_comparison:
+                bc = budget_comparison[category]
+                budget_info = f" (Presup: {self.format_currency(bc['budget'])}, Var: {bc['variance_pct']:+.1f}%)"
+            message += f"\n• {category[:30]}: {self.format_currency(amount)} ({pct:.1f}%){budget_info}"
+        
+        # Análisis por producto si hay datos
+        if revenue_by_product:
+            message += f"\n\n*Ingresos por Producto/Servicio (Top 5):*"
+            sorted_products = sorted(revenue_by_product.items(), key=lambda x: x[1], reverse=True)[:5]
+            for product, amount in sorted_products:
+                pct = (amount / total_revenue * 100) if total_revenue > 0 else 0
+                message += f"\n• {product[:30]}: {self.format_currency(amount)} ({pct:.1f}%)"
         
         priority = Priority.MEDIUM
         
         if margin_pct < 20:
             message += f"\n\n⚠️ *Margen de contribución bajo ({margin_pct:.1f}%)*"
             priority = Priority.HIGH
+        
+        # Alertas por desviaciones de presupuesto
+        if budget_comparison:
+            significant_deviations = [
+                cat for cat, data in budget_comparison.items()
+                if abs(data["variance_pct"]) > 15
+            ]
+            if significant_deviations:
+                message += f"\n\n⚠️ *Desviaciones significativas en: {', '.join(significant_deviations[:3])}*"
         
         await self.notify(
             title="📈 Análisis de Rentabilidad",
@@ -1244,8 +1334,18 @@ Variación: {expense_variance_pct:.1f}%
                 "margin_pct": margin_pct,
                 "break_even": break_even,
                 "expenses_by_category": expenses_by_category,
+                "revenue_by_product": revenue_by_product,
+                "budget_comparison": budget_comparison,
             }
         )
+    
+    def _model_exists(self, model_name: str) -> bool:
+        """Verifica si un modelo de Odoo existe."""
+        try:
+            self.odoo.execute(model_name, "check_access_rights", ["read"], {"raise_exception": False})
+            return True
+        except Exception:
+            return False
     
     async def generate_annual_forecast(self) -> TaskResult:
         """Genera proyecciones anuales con múltiples escenarios."""

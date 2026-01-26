@@ -21,6 +21,7 @@ import {
   Target,
   PiggyBank
 } from 'lucide-react'
+import FinanceDashboard from './FinanceDashboard'
 
 const API_BASE = '/api'
 
@@ -203,6 +204,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
+  const [showFinanceDashboard, setShowFinanceDashboard] = useState(false)
   
   const fetchData = useCallback(async () => {
     try {
@@ -294,6 +296,38 @@ export default function App() {
   const highCount = pendingByPriority.high || 0
   const totalPending = dashboard?.pending_proposals?.total || 0
   
+  // Si se muestra el dashboard financiero, renderizarlo
+  if (showFinanceDashboard) {
+    return (
+      <div className="min-h-screen">
+        <header className="sticky top-0 z-50 glass border-b border-surface-800/50">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-aria-500 to-aria-700 rounded-xl">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold tracking-tight">ARIA</h1>
+                  <p className="text-xs text-surface-500">Planeación Financiera</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowFinanceDashboard(false)}
+                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors"
+              >
+                Volver al Dashboard
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          <FinanceDashboard />
+        </main>
+      </div>
+    )
+  }
+  
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -364,13 +398,18 @@ export default function App() {
               subtitle="Monitoreando operaciones"
               icon={Bot}
             />
-            <KPICard
-              title="Saldo Bancario"
-              value={formatCurrency(dashboard?.agents?.finanzas?.cash_balance)}
-              subtitle={`Runway: ${Math.round(dashboard?.agents?.finanzas?.runway_days || 0)} días`}
-              icon={Wallet}
-              status={dashboard?.agents?.finanzas?.status}
-            />
+            <button 
+              onClick={() => setShowFinanceDashboard(true)}
+              className="text-left"
+            >
+              <KPICard
+                title="Saldo Bancario"
+                value={formatCurrency(dashboard?.agents?.finanzas?.cash_balance)}
+                subtitle={`Runway: ${Math.round(dashboard?.agents?.finanzas?.runway_days || 0)} días • Click para ver análisis completo`}
+                icon={Wallet}
+                status={dashboard?.agents?.finanzas?.status}
+              />
+            </button>
             <KPICard
               title="CxC Vencidas"
               value={formatCurrency(dashboard?.agents?.cobranza?.total_overdue)}

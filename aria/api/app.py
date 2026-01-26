@@ -396,6 +396,122 @@ async def dashboard():
     }
 
 
+@app.get("/api/finance/metrics", tags=["Finance"])
+async def finance_metrics():
+    """Obtiene métricas financieras avanzadas del agente de finanzas."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        # Obtener resumen básico
+        summary = await agent.get_status_summary()
+        
+        # Obtener resultados de tareas recientes si están disponibles
+        metrics = {
+            "summary": summary,
+            "ratios": {},
+            "budget": {},
+            "profitability": {},
+            "forecast": {},
+        }
+        
+        # Intentar obtener datos de tareas ejecutadas recientemente
+        # Esto requiere que las tareas hayan sido ejecutadas al menos una vez
+        # Por ahora retornamos el resumen y estructura para métricas futuras
+        
+        return metrics
+    except Exception as e:
+        logger.error(f"Error obteniendo métricas financieras: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/ratios", tags=["Finance"])
+async def finance_ratios():
+    """Ejecuta análisis de ratios financieros y retorna resultados."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        # Ejecutar tarea de análisis financiero
+        result = await agent.run_task("financial_analysis")
+        
+        return {
+            "success": result.success,
+            "data": result.data,
+            "executed_at": result.completed_at.isoformat() if result.completed_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error ejecutando análisis de ratios: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/budget", tags=["Finance"])
+async def finance_budget():
+    """Ejecuta comparación vs presupuesto y retorna resultados."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        result = await agent.run_task("budget_comparison")
+        
+        return {
+            "success": result.success,
+            "data": result.data,
+            "executed_at": result.completed_at.isoformat() if result.completed_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error ejecutando comparación de presupuesto: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/profitability", tags=["Finance"])
+async def finance_profitability():
+    """Ejecuta análisis de rentabilidad y retorna resultados."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        result = await agent.run_task("profitability_analysis")
+        
+        return {
+            "success": result.success,
+            "data": result.data,
+            "executed_at": result.completed_at.isoformat() if result.completed_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error ejecutando análisis de rentabilidad: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/finance/forecast", tags=["Finance"])
+async def finance_forecast():
+    """Ejecuta proyecciones anuales y retorna resultados."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        result = await agent.run_task("annual_forecast")
+        
+        return {
+            "success": result.success,
+            "data": result.data,
+            "executed_at": result.completed_at.isoformat() if result.completed_at else None,
+        }
+    except Exception as e:
+        logger.error(f"Error ejecutando proyecciones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Reports ====================
 
 @app.get("/api/reports", tags=["Reports"])
