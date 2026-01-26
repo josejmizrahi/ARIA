@@ -192,6 +192,45 @@ class NotificationSettings(BaseSettings):
         return self.email.enabled
 
 
+class FinanceBudgetSettings(BaseSettings):
+    """Configuración de presupuestos financieros."""
+    
+    model_config = SettingsConfigDict(
+        env_prefix="FINANCE_BUDGET_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+    
+    monthly_revenue: float = Field(
+        default=24_500_000,
+        ge=0,
+        description="Presupuesto mensual de ingresos"
+    )
+    monthly_expenses: float = Field(
+        default=17_150_000,
+        ge=0,
+        description="Presupuesto mensual de gastos (70% de ingresos por defecto)"
+    )
+    
+    # Presupuestos por categoría (opcional, formato JSON en env)
+    # Ejemplo: FINANCE_BUDGET_BY_CATEGORY='{"Ventas": 20000000, "Marketing": 2000000, "Operaciones": 5000000}'
+    by_category: Optional[str] = Field(
+        default=None,
+        description="Presupuestos por categoría en formato JSON"
+    )
+    
+    def get_category_budgets(self) -> dict[str, float]:
+        """Retorna presupuestos por categoría como diccionario."""
+        if not self.by_category:
+            return {}
+        try:
+            import json
+            return json.loads(self.by_category)
+        except Exception:
+            return {}
+
+
 class AgentSettings(BaseSettings):
     """Configuración de agentes."""
     
@@ -265,6 +304,7 @@ class Settings(BaseSettings):
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
+    finance_budget: FinanceBudgetSettings = Field(default_factory=FinanceBudgetSettings)
     
     # Accesos directos para compatibilidad
     @property

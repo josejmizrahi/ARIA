@@ -1,0 +1,83 @@
+version: '3.8'
+
+# ARIA - Configuración de Producción para Nube
+# =============================================
+# 
+# Uso:
+#   cd docker
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# Verificar:
+#   docker-compose -f docker-compose.prod.yml ps
+#   docker-compose -f docker-compose.prod.yml logs -f
+
+services:
+  # Redis para almacenamiento de propuestas
+  redis:
+    image: redis:7-alpine
+    container_name: aria-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data-prod:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - aria-network
+
+  # API de ARIA
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: aria-api-prod
+    ports:
+      - "8000:8000"
+    environment:
+      - ARIA_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - ODOO_URL=${ODOO_URL}
+      - ODOO_DB=${ODOO_DB}
+      - ODOO_USER=${ODOO_USER}
+      - ODOO_PASSWORD=${ODOO_PASSWORD}
+      - ODOO_COMPANY_ID=${ODOO_COMPANY_ID}
+    volumes:
+      - ../logs:/app/logs
+      - ../.env:/app/.env:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - aria-network
+    command: aria api --host 0.0.0.0 --port 8000
+
+  # Dashboard de ARIA
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: aria-dashboard-prod
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=${API_URL:-http://api:8000}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - aria-network
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  redis-data-prod:
+    name: aria-redis-data-prod
+
+networks:
+  aria-network:
+    driver: bridge

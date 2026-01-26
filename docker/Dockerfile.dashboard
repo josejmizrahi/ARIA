@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copiar archivos de dependencias primero (para cache de Docker)
+COPY package*.json ./
+
+# Instalar dependencias
+RUN npm ci --legacy-peer-deps || npm install
+
+# Copiar código fuente
+COPY . .
+
+# Exponer puerto
+EXPOSE 5173
+
+# Comando por defecto (modo desarrollo)
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

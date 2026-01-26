@@ -38,9 +38,9 @@ class ReceivablesAgent(BaseAgent):
             description="Gestión de cuentas por cobrar y recuperación de cartera"
         )
         
-        # Compañía a monitorear (None = todas)
-        # Para coincidir con reportes de Odoo, debe especificarse la compañía
-        self.company_id = company_id
+        # Compañía a monitorear (default desde settings)
+        from aria.config import settings
+        self.company_id = company_id or settings.odoo.company_id
         
         # Configuración de escalamiento
         self.escalation_levels = {
@@ -157,11 +157,15 @@ class ReceivablesAgent(BaseAgent):
     async def check_overdue_invoices(self) -> TaskResult:
         """
         Revisa facturas vencidas y propone acciones de cobro.
+        También procesa mensajes pendientes de otros agentes.
         """
         started_at = datetime.now()
         proposals_created = 0
         
         self.logger.info("Revisando facturas vencidas...")
+        
+        # Procesar mensajes pendientes de otros agentes
+        await self._process_pending_messages()
         
         overdue = self._get_overdue_invoices()
         
@@ -618,7 +622,7 @@ Documentos: {len(due_this_week)}
         
         return result
     
-    def _get_all_receivables(self) -> list[dict]:
+    def _get_all_receivables(self, company_id: int | None = None) -> list[dict]:
         """
         Obtiene TODAS las partidas de cuentas por cobrar pendientes (vencidas y por vencer).
         Útil para el análisis completo de cartera.
@@ -646,6 +650,75 @@ Documentos: {len(due_this_week)}
             order="date_maturity asc"
         )
     
+    async def _process_pending_messages(self) -> None:
+        """Procesa mensajes pendientes de otros agentes."""
+        try:
+            messages = self.check_messages(unread_only=True)
+            
+            for msg_data in messages:
+                try:
+                    from uuid import UUID
+                    msg_id = UUID(msg_data.get("id"))
+                    msg_type = msg_data.get("message_type")
+                    from_agent = msg_data.get("from_agent")
+                    content = msg_data.get("content", "")
+                    data = msg_data.get("data", {})
+                    
+                    # Responder a consultas sobre proyección de cobranza
+                    if msg_type == "alert" and ("cobranza" in content.lower() or "proyección" in content.lower()):
+                        weeks = data.get("weeks", 4)
+                        company_id = data.get("company_id", self.company_id)
+                        
+                        # Calcular proyección de cobranza
+                        total_expected = 0
+                        receivables = self._get_all_receivables()
+                        
+                        for week in range(1, weeks + 1):
+                            days_start = (week - 1) * 7
+                            days_end = week * 7
+                            week_collections = sum(
+                                r.get("amount_residual", 0) for r in receivables
+                                if self._days_until_due(r.get("date_maturity", "")) <= days_end
+                                and self._days_until_due(r.get("date_maturity", "")) > days_start
+                            )
+                            total_expected += week_collections
+                        
+                        # Responder
+                        await self.respond_to_agent(
+                            message_id=str(msg_id),
+                            response=f"Proyección de cobranza para {weeks} semanas: {self.format_currency(total_expected)}",
+                            data={
+                                "weeks": weeks,
+                                "total_expected": total_expected,
+                                "company_id": company_id,
+                            }
+                        )
+                        
+                        self.logger.info(f"Respondido a {from_agent} sobre proyección de cobranza")
+                    
+                    # Marcar como leído
+                    self.messaging.mark_read(msg_id, self.name)
+                    
+                except Exception as msg_error:
+                    self.logger.warning(f"Error procesando mensaje individual: {msg_error}")
+                    continue
+                
+        except Exception as e:
+            self.logger.warning(f"Error procesando mensajes pendientes: {e}")
+    
+    def _days_until_due(self, due_date: str) -> int:
+        """Calcula días hasta vencimiento."""
+        if not due_date:
+            return 999
+        
+        try:
+            from datetime import datetime
+            due = datetime.strptime(str(due_date)[:10], "%Y-%m-%d")
+            today = datetime.now()
+            return (due - today).days
+        except Exception:
+            return 999
+    
     def _group_by_customer(self, receivables: list[dict]) -> dict[int, dict]:
         """Agrupa partidas por cobrar por cliente."""
         by_customer: dict[int, dict] = {}
@@ -664,7 +737,10 @@ Documentos: {len(due_this_week)}
                 }
             
             due_date = line.get("invoice_date_due") or line.get("date_maturity", "")
-            days_overdue = self.days_between(due_date) if due_date else 0
+            # days_between retorna días desde la fecha (positivo si es pasado)
+            # Para calcular días hasta vencimiento, usar negativo si es futuro
+            days_diff = self.days_between(due_date) if due_date else 0
+            days_overdue = max(0, days_diff)  # Solo positivo = vencido
             amount = line.get("amount_residual", 0)
             
             by_customer[partner_id]["invoices"].append({

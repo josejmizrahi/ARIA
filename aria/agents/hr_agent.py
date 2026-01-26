@@ -885,10 +885,12 @@ _¡Buen fin de semana!_
         return 0
     
     def _model_exists(self, model_name: str) -> bool:
-        """Verifica si un modelo existe en Odoo."""
+        """Verifica si un modelo existe en Odoo usando introspección."""
         try:
-            self.search_read(model_name, [("id", ">", 0)], ["id"], limit=1)
-            return True
+            from aria.agent_introspection import get_introspection
+            introspection = get_introspection(self.odoo)
+            model = introspection.get_model(model_name)
+            return model.exists()
         except Exception:
             return False
 

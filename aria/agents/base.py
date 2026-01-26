@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 import traceback
 from typing import Any, Optional
 
+from pydantic import BaseModel, Field
+
 from aria.config import settings
 from aria.models.proposal import Proposal, ProposalType, ProposalAction, Priority
 from aria.models.task import TaskDefinition, TaskResult
@@ -122,6 +124,145 @@ class BaseAgent(ABC):
             self._executor = action_executor
         return self._executor
     
+    @property
+    def messaging(self):
+        """Sistema de mensajería entre agentes (lazy loading)."""
+        from aria.agent_messaging import get_messaging
+        return get_messaging()
+    
+    @property
+    def introspection(self):
+        """Sistema de introspección (lazy loading)."""
+        from aria.agent_introspection import get_introspection
+        return get_introspection(self.odoo)
+    
+    @property
+    def learning(self):
+        """Sistema de aprendizaje (lazy loading)."""
+        from aria.agent_learning import get_learning
+        return get_learning()
+    
+    # ==================== Métodos de Comunicación ====================
+    
+    async def ask_agent(
+        self,
+        to_agent: str,
+        question: str,
+        data: Optional[dict] = None,
+        priority: str = "medium",
+    ) -> Optional[dict]:
+        """
+        Hace una pregunta a otro agente.
+        
+        Returns:
+            Respuesta del agente o None si no responde
+        """
+        from aria.agent_messaging import MessagePriority
+        
+        priority_map = {
+            "low": MessagePriority.LOW,
+            "medium": MessagePriority.MEDIUM,
+            "high": MessagePriority.HIGH,
+            "critical": MessagePriority.CRITICAL,
+        }
+        
+        message = self.messaging.query(
+            from_agent=self.name,
+            to_agent=to_agent,
+            question=question,
+            data=data or {},
+            priority=priority_map.get(priority, MessagePriority.MEDIUM),
+        )
+        
+        # Esperar respuesta (simplificado - en producción usaría async/await con timeout)
+        # Por ahora retornamos None y el otro agente debe responder manualmente
+        return None
+    
+    async def respond_to_agent(
+        self,
+        message_id: str,
+        response: str,
+        data: Optional[dict] = None,
+    ) -> None:
+        """Responde a un mensaje de otro agente."""
+        from uuid import UUID
+        
+        try:
+            msg_id = UUID(message_id)
+            self.messaging.respond(
+                from_agent=self.name,
+                to_message_id=msg_id,
+                response=response,
+                data=data or {},
+            )
+        except Exception as e:
+            self.logger.error(f"Error respondiendo a mensaje {message_id}: {e}")
+    
+    async def alert_agent(
+        self,
+        to_agent: str,
+        alert_subject: str,
+        alert_content: str,
+        data: Optional[dict] = None,
+        priority: str = "high",
+    ) -> None:
+        """Envía una alerta a otro agente."""
+        from aria.agent_messaging import MessagePriority
+        
+        priority_map = {
+            "low": MessagePriority.LOW,
+            "medium": MessagePriority.MEDIUM,
+            "high": MessagePriority.HIGH,
+            "critical": MessagePriority.CRITICAL,
+        }
+        
+        self.messaging.alert(
+            from_agent=self.name,
+            to_agent=to_agent,
+            alert_subject=alert_subject,
+            alert_content=alert_content,
+            data=data or {},
+            priority=priority_map.get(priority, MessagePriority.HIGH),
+        )
+    
+    async def request_data_from_agent(
+        self,
+        to_agent: str,
+        data_request: str,
+        fields: Optional[list[str]] = None,
+        filters: Optional[dict] = None,
+    ) -> Optional[dict]:
+        """Solicita datos específicos a otro agente."""
+        message = self.messaging.request_data(
+            from_agent=self.name,
+            to_agent=to_agent,
+            data_request=data_request,
+            fields=fields,
+            filters=filters,
+        )
+        
+        # El otro agente debe responder manualmente por ahora
+        return None
+    
+    def check_messages(self, unread_only: bool = True) -> list[dict]:
+        """Revisa mensajes recibidos."""
+        from aria.agent_messaging import MessageType
+        
+        messages = self.messaging.get_messages(
+            agent_name=self.name,
+            unread_only=unread_only,
+        )
+        
+        # Convertir a dict y marcar como leído si es necesario
+        result = []
+        for msg in messages:
+            msg_dict = msg.model_dump()
+            result.append(msg_dict)
+            if not unread_only:
+                self.messaging.mark_read(msg.id, self.name)
+        
+        return result
+    
     # ==================== Métodos Abstractos ====================
     
     @abstractmethod
@@ -190,7 +331,7 @@ class BaseAgent(ABC):
     
     async def run_task(self, task: TaskDefinition) -> TaskResult:
         """
-        Ejecuta una tarea específica.
+        Ejecuta una tarea específica con introspección y aprendizaje.
         
         Args:
             task: Tarea a ejecutar
@@ -201,6 +342,12 @@ class BaseAgent(ABC):
         started_at = datetime.now()
         self.logger.info(f"Ejecutando tarea: {task.name}")
         
+        # Procesar mensajes pendientes antes de ejecutar
+        try:
+            await self._process_pending_messages()
+        except Exception as e:
+            self.logger.warning(f"Error procesando mensajes pendientes: {e}")
+        
         try:
             # Obtener método y ejecutar
             method = getattr(self, task.method)
@@ -210,6 +357,15 @@ class BaseAgent(ABC):
             if isinstance(result, TaskResult):
                 task.last_result = result
                 task.last_run = datetime.now()
+                
+                # Aprender de la ejecución exitosa
+                if result.success:
+                    self.learning.record_success(
+                        self.name,
+                        f"task_{task.name}",
+                        {"task": task.name, "method": task.method}
+                    )
+                
                 return result
             
             # Si no, crear TaskResult genérico
@@ -225,6 +381,13 @@ class BaseAgent(ABC):
             task.last_result = task_result
             task.last_run = datetime.now()
             
+            # Aprender de éxito
+            self.learning.record_success(
+                self.name,
+                f"task_{task.name}",
+                {"task": task.name, "method": task.method}
+            )
+            
             self.logger.info(
                 f"Tarea completada: {task.name}",
                 duration=f"{task_result.duration_seconds:.2f}s"
@@ -235,6 +398,21 @@ class BaseAgent(ABC):
         except Exception as e:
             error_tb = traceback.format_exc()
             self.logger.error(f"Error en tarea {task.name}: {e}")
+            
+            # Aprender del error
+            self.learning.record_failure(
+                self.name,
+                f"task_{task.name}",
+                {"task": task.name, "error": str(e)}
+            )
+            
+            # Intentar aprender de logs
+            try:
+                from pathlib import Path
+                log_file = Path(settings.log_dir) / "aria.log"
+                self.learning.learn_from_logs(self.name, log_file)
+            except Exception as learn_error:
+                self.logger.warning(f"Error aprendiendo de logs: {learn_error}")
             
             task_result = TaskResult(
                 task_name=task.name,
@@ -250,6 +428,19 @@ class BaseAgent(ABC):
             task.last_run = datetime.now()
             
             return task_result
+    
+    async def _process_pending_messages(self) -> None:
+        """Procesa mensajes pendientes (puede ser sobrescrito por agentes específicos)."""
+        # Por defecto, solo marca como leído
+        # Los agentes pueden sobrescribir para responder automáticamente
+        messages = self.check_messages(unread_only=True)
+        for msg in messages:
+            try:
+                from uuid import UUID
+                msg_id = UUID(msg.get("id"))
+                self.messaging.mark_read(msg_id, self.name)
+            except Exception:
+                pass
     
     async def run_all_tasks(self) -> list[TaskResult]:
         """
@@ -428,16 +619,120 @@ class BaseAgent(ABC):
         limit: int = 100,
         offset: int = 0,
         order: Optional[str] = None,
+        validate: bool = True,  # Validar campos antes de consultar
     ) -> list[dict]:
-        """Wrapper conveniente para búsquedas en Odoo."""
-        return self.odoo.search_read(
-            model,
-            domain or [],
-            fields=fields,
-            offset=offset,
-            limit=limit,
-            order=order
-        )
+        """
+        Wrapper conveniente para búsquedas en Odoo con introspección automática.
+        
+        Args:
+            validate: Si True, valida campos antes de consultar (recomendado)
+        """
+        fields = fields or []
+        
+        # Introspección automática si está habilitada
+        if validate and fields:
+            from aria.agent_introspection import get_introspection
+            
+            try:
+                introspection = get_introspection(self.odoo)
+                validation = introspection.validate_query(model, fields, domain)
+                
+                if not validation["valid"]:
+                    # Si el modelo no existe, retornar lista vacía sin intentar consultar
+                    if not validation.get("model_exists", True):
+                        # Solo loguear una vez por modelo para evitar spam
+                        if not hasattr(self, '_logged_missing_models'):
+                            self._logged_missing_models = set()
+                        if model not in self._logged_missing_models:
+                            self.logger.debug(
+                                f"Modelo {model} no existe en Odoo. Retornando lista vacía."
+                            )
+                            self._logged_missing_models.add(model)
+                        return []
+                    
+                    # Usar solo campos válidos
+                    valid_fields = [
+                        field for field, valid in validation["fields_valid"].items()
+                        if valid
+                    ]
+                    
+                    if valid_fields:
+                        self.logger.warning(
+                            f"Campos inválidos en {model}: {validation['missing_fields']}. "
+                            f"Usando solo campos válidos: {valid_fields}"
+                        )
+                        fields = valid_fields
+                    else:
+                        # Solo loguear una vez por modelo para evitar spam
+                        if not hasattr(self, '_logged_missing_fields'):
+                            self._logged_missing_fields = set()
+                        model_key = f"{model}:{','.join(sorted(fields))}"
+                        if model_key not in self._logged_missing_fields:
+                            self.logger.warning(
+                                f"Modelo {model} existe pero ningún campo solicitado es válido. "
+                                f"Campos solicitados: {fields}"
+                            )
+                            self._logged_missing_fields.add(model_key)
+                        return []
+                
+                # Si hay sugerencias, loguearlas
+                if validation.get("suggestions"):
+                    for missing, suggestion in validation["suggestions"].items():
+                        self.logger.info(
+                            f"Campo '{missing}' no existe en {model}. "
+                            f"Sugerencia: usar '{suggestion}'"
+                        )
+            except Exception as e:
+                self.logger.warning(f"Error en introspección de {model}: {e}. Continuando sin validación.")
+        
+        # Ejecutar consulta con manejo de errores mejorado
+        try:
+            return self.odoo.search_read(
+                model,
+                domain or [],
+                fields=fields,
+                offset=offset,
+                limit=limit,
+                order=order
+            )
+        except Exception as e:
+            # Si el error es que el modelo no existe y ya lo validamos, solo retornar vacío
+            error_str = str(e).lower()
+            if "doesn't exist" in error_str or "no existe" in error_str:
+                if not hasattr(self, '_logged_missing_models'):
+                    self._logged_missing_models = set()
+                if model not in self._logged_missing_models:
+                    self.logger.debug(f"Modelo {model} no existe en Odoo (confirmado por error). Retornando lista vacía.")
+                    self._logged_missing_models.add(model)
+                return []
+            # Si el error es de campo inválido (como company_id), intentar sin ese campo
+            if "invalid field" in error_str and "company_id" in error_str:
+                # Extraer el campo problemático del dominio
+                if domain:
+                    # Filtrar dominio removiendo company_id
+                    filtered_domain = [
+                        item for item in domain 
+                        if not (isinstance(item, (list, tuple)) and len(item) >= 2 and item[0] == "company_id")
+                    ]
+                    if filtered_domain != domain:
+                        self.logger.debug(
+                            f"Campo company_id no existe en {model}. "
+                            f"Reintentando sin filtro de company_id."
+                        )
+                        try:
+                            return self.odoo.search_read(
+                                model,
+                                filtered_domain,
+                                fields=fields,
+                                offset=offset,
+                                limit=limit,
+                                order=order
+                            )
+                        except Exception:
+                            # Si aún falla, retornar vacío
+                            return []
+            # Para otros errores, relanzar
+            raise
     
     def search_count(self, model: str, domain: Optional[list] = None) -> int:
         """Cuenta registros en Odoo."""

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env.local
+.env.*.local
+
+# Node (para Dockerfile.api)
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Scripts (opcional, mantener si los necesitas)
+# scripts/

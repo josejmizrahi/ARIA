@@ -213,12 +213,22 @@ class OdooClient:
             return result
             
         except xmlrpc.client.Fault as e:
-            logger.error(
-                "Error en operación Odoo",
-                model=model,
-                method=method,
-                error=str(e)
-            )
+            error_str = str(e).lower()
+            # Si el error es que el modelo no existe, loguear en nivel debug para evitar spam
+            if "doesn't exist" in error_str or "no existe" in error_str or "object" in error_str and "exist" in error_str:
+                logger.debug(
+                    "Modelo no existe en Odoo",
+                    model=model,
+                    method=method,
+                    error=str(e)
+                )
+            else:
+                logger.error(
+                    "Error en operación Odoo",
+                    model=model,
+                    method=method,
+                    error=str(e)
+                )
             raise OdooOperationError(f"Error en {model}.{method}: {e}")
     
     # ==========================================
