@@ -313,6 +313,9 @@ export default function FinanceDashboard() {
   const [profitability, setProfitability] = useState(null)
   const [forecast, setForecast] = useState(null)
   const [budgets, setBudgets] = useState(null)
+  const [bankAccounts, setBankAccounts] = useState(null)
+  const [companies, setCompanies] = useState([])
+  const [selectedCompany, setSelectedCompany] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [showBudgetConfig, setShowBudgetConfig] = useState(false)
@@ -323,15 +326,29 @@ export default function FinanceDashboard() {
     return () => clearInterval(interval)
   }, [])
   
+  useEffect(() => {
+    // Cargar lista de compañías
+    fetch(`${API_BASE}/companies`)
+      .then(res => res.json())
+      .then(data => {
+        setCompanies(data.companies || [])
+        if (data.companies && data.companies.length > 0 && !selectedCompany) {
+          setSelectedCompany(data.companies[0].id)
+        }
+      })
+      .catch(err => console.error('Error cargando compañías:', err))
+  }, [])
+  
   const fetchFinanceData = async () => {
     try {
-      const [summaryRes, ratiosRes, budgetRes, profitabilityRes, forecastRes, budgetsRes] = await Promise.all([
+      const [summaryRes, ratiosRes, budgetRes, profitabilityRes, forecastRes, budgetsRes, bankAccountsRes] = await Promise.all([
         fetch(`${API_BASE}/agents/finanzas/summary`),
         fetch(`${API_BASE}/finance/ratios`).catch(() => null),
         fetch(`${API_BASE}/finance/budget`).catch(() => null),
         fetch(`${API_BASE}/finance/profitability`).catch(() => null),
         fetch(`${API_BASE}/finance/forecast`).catch(() => null),
         fetch(`${API_BASE}/finance/budgets`).catch(() => null),
+        fetch(`${API_BASE}/finance/bank-accounts`).catch(() => null),
       ])
       
       if (summaryRes.ok) {
@@ -362,6 +379,11 @@ export default function FinanceDashboard() {
       if (budgetsRes?.ok) {
         const budgetsData = await budgetsRes.json()
         setBudgets(budgetsData.budgets)
+      }
+      
+      if (bankAccountsRes?.ok) {
+        const bankAccountsData = await bankAccountsRes.json()
+        setBankAccounts(bankAccountsData)
       }
     } catch (err) {
       console.error('Error fetching finance data:', err)
@@ -423,13 +445,28 @@ export default function FinanceDashboard() {
           </h1>
           <p className="text-surface-500 text-sm mt-1">Análisis financiero profesional y métricas avanzadas</p>
         </div>
-        <button
-          onClick={() => setShowBudgetConfig(!showBudgetConfig)}
-          className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-          {showBudgetConfig ? 'Ocultar Configuración' : 'Configurar Presupuestos'}
-        </button>
+        <div className="flex items-center gap-3">
+          {companies.length > 1 && (
+            <select
+              value={selectedCompany || ''}
+              onChange={(e) => setSelectedCompany(parseInt(e.target.value))}
+              className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg text-sm"
+            >
+              {companies.map(comp => (
+                <option key={comp.id} value={comp.id}>
+                  {comp.name} ({comp.currency})
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={() => setShowBudgetConfig(!showBudgetConfig)}
+            className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            {showBudgetConfig ? 'Ocultar Configuración' : 'Configurar Presupuestos'}
+          </button>
+        </div>
       </div>
       
       {/* Budget Configuration */}
@@ -465,6 +502,47 @@ export default function FinanceDashboard() {
       {/* Overview Tab */}
       {activeTab === 'overview' && summary && (
         <div className="space-y-6">
+          {/* Saldos por Divisa */}
+          {summary.cash_by_currency && Object.keys(summary.cash_by_currency).length > 0 && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-aria-500" />
+                Saldos por Divisa
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.entries(summary.cash_by_currency).map(([currency, balance]) => (
+                  <div key={currency} className="p-4 bg-surface-900 rounded-lg">
+                    <p className="text-sm text-surface-400 mb-1">{currency}</p>
+                    <p className="text-2xl font-bold font-mono">{formatCurrency(balance)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Saldos por Cuenta Bancaria */}
+          {bankAccounts && bankAccounts.accounts_by_currency && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-aria-500" />
+                Saldos por Cuenta Bancaria
+              </h3>
+              {Object.entries(bankAccounts.accounts_by_currency).map(([currency, accounts]) => (
+                <div key={currency} className="mb-6">
+                  <h4 className="text-sm font-medium text-surface-400 mb-3">{currency}</h4>
+                  <div className="space-y-2">
+                    {accounts.map((acc, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-surface-900 rounded-lg">
+                        <span className="font-medium">{acc.name}</span>
+                        <span className="font-mono">{formatCurrency(acc.balance)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Saldo Disponible"

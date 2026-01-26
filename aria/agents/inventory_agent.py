@@ -888,43 +888,76 @@ Productos: {len(products)}
     
     def _count_negative_stock(self) -> int:
         """Cuenta productos con stock negativo."""
-        return len(self.search_read(
-            "product.product",
-            [
-                ("qty_available", "<", self.negative_stock_threshold),
-                ("type", "=", "product"),
-                ("company_id", "in", [self.company_id, False]),
-            ],
-            ["id"],
-            limit=1000
-        ))
+        try:
+            return self.search_count(
+                "product.product",
+                [
+                    ("qty_available", "<", self.negative_stock_threshold),
+                    ("type", "=", "product"),
+                ]
+            )
+        except Exception:
+            return len(self.search_read(
+                "product.product",
+                [
+                    ("qty_available", "<", self.negative_stock_threshold),
+                    ("type", "=", "product"),
+                ],
+                ["id"],
+                limit=1000
+            ))
     
     def _count_zero_stock(self) -> int:
         """Cuenta productos sin stock."""
-        return len(self.search_read(
-            "product.product",
-            [
-                ("qty_available", "=", 0),
-                ("type", "=", "product"),
-                ("active", "=", True),
-                ("company_id", "in", [self.company_id, False]),
-            ],
-            ["id"],
-            limit=5000
-        ))
+        try:
+            return self.search_count(
+                "product.product",
+                [
+                    ("qty_available", "=", 0),
+                    ("type", "=", "product"),
+                    ("active", "=", True),
+                ]
+            )
+        except Exception:
+            return len(self.search_read(
+                "product.product",
+                [
+                    ("qty_available", "=", 0),
+                    ("type", "=", "product"),
+                    ("active", "=", True),
+                ],
+                ["id"],
+                limit=5000
+            ))
     
     def _count_storable_products(self) -> int:
         """Cuenta total de productos almacenables."""
-        return len(self.search_read(
-            "product.product",
-            [
-                ("type", "=", "product"),
-                ("active", "=", True),
-                ("company_id", "in", [self.company_id, False]),
-            ],
-            ["id"],
-            limit=10000
-        ))
+        # Los productos en Odoo pueden no tener company_id directamente
+        # Usamos search_count que es más eficiente
+        try:
+            count = self.search_count(
+                "product.product",
+                [
+                    ("type", "=", "product"),
+                    ("active", "=", True),
+                ]
+            )
+            return count
+        except Exception as e:
+            self.logger.warning(f"Error contando productos: {e}")
+            # Fallback: intentar sin filtro de company_id
+            try:
+                return len(self.search_read(
+                    "product.product",
+                    [
+                        ("type", "=", "product"),
+                        ("active", "=", True),
+                    ],
+                    ["id"],
+                    limit=10000
+                ))
+            except Exception:
+                return 0
     
     def _field_exists(self, model: str, field: str) -> bool:
         """Verifica si un campo existe en un modelo."""

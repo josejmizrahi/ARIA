@@ -65,9 +65,13 @@ function formatNumber(value) {
 }
 
 // KPI Card Component
-function KPICard({ title, value, subtitle, icon: Icon, status, trend }) {
+function KPICard({ title, value, subtitle, icon: Icon, status, trend, onClick }) {
+  const Component = onClick ? 'button' : 'div'
   return (
-    <div className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''}`}>
+    <Component 
+      onClick={onClick}
+      className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''} ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-all duration-200 text-left w-full' : ''}`}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-surface-400 text-sm font-medium mb-1">{title}</p>
@@ -88,7 +92,7 @@ function KPICard({ title, value, subtitle, icon: Icon, status, trend }) {
           <span>{Math.abs(trend).toFixed(1)}% vs periodo anterior</span>
         </div>
       )}
-    </div>
+    </Component>
   )
 }
 
@@ -205,6 +209,8 @@ export default function App() {
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
   const [showFinanceDashboard, setShowFinanceDashboard] = useState(false)
+  const [companies, setCompanies] = useState([])
+  const [selectedCompany, setSelectedCompany] = useState(null)
   
   const fetchData = useCallback(async () => {
     try {
@@ -239,10 +245,23 @@ export default function App() {
   }, [])
   
   useEffect(() => {
+    // Cargar compañías disponibles
+    fetch(`${API_BASE}/companies`)
+      .then(res => res.json())
+      .then(data => {
+        setCompanies(data.companies || [])
+        if (data.companies && data.companies.length > 0 && !selectedCompany) {
+          setSelectedCompany(data.companies[0].id)
+        }
+      })
+      .catch(err => console.error('Error cargando compañías:', err))
+  }, [])
+  
+  useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, 30000) // Refresh every 30 seconds
     return () => clearInterval(interval)
-  }, [fetchData])
+  }, [fetchData, selectedCompany])
   
   const handleApprove = async (id) => {
     try {
@@ -345,6 +364,19 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4">
+              {companies.length > 1 && (
+                <select
+                  value={selectedCompany || ''}
+                  onChange={(e) => setSelectedCompany(parseInt(e.target.value))}
+                  className="px-3 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg text-sm"
+                >
+                  {companies.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {lastUpdate && (
                 <span className="text-sm text-surface-500 flex items-center gap-2">
                   <Clock className="w-4 h-4" />
@@ -398,18 +430,14 @@ export default function App() {
               subtitle="Monitoreando operaciones"
               icon={Bot}
             />
-            <button 
+            <KPICard
+              title="Saldo Bancario"
+              value={formatCurrency(dashboard?.agents?.finanzas?.cash_balance)}
+              subtitle={`Runway: ${Math.round(dashboard?.agents?.finanzas?.runway_days || 0)} días • Click para ver análisis completo`}
+              icon={Wallet}
+              status={dashboard?.agents?.finanzas?.status}
               onClick={() => setShowFinanceDashboard(true)}
-              className="text-left"
-            >
-              <KPICard
-                title="Saldo Bancario"
-                value={formatCurrency(dashboard?.agents?.finanzas?.cash_balance)}
-                subtitle={`Runway: ${Math.round(dashboard?.agents?.finanzas?.runway_days || 0)} días • Click para ver análisis completo`}
-                icon={Wallet}
-                status={dashboard?.agents?.finanzas?.status}
-              />
-            </button>
+            />
             <KPICard
               title="CxC Vencidas"
               value={formatCurrency(dashboard?.agents?.cobranza?.total_overdue)}
@@ -434,7 +462,13 @@ export default function App() {
                   <AgentCard 
                     name={name} 
                     data={data}
-                    onClick={() => console.log('Agent clicked:', name)}
+                    onClick={() => {
+                      if (name === 'finanzas') {
+                        setShowFinanceDashboard(true)
+                      } else {
+                        console.log('Agent clicked:', name)
+                      }
+                    }}
                   />
                 </div>
               ))}

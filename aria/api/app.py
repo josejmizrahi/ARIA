@@ -513,6 +513,74 @@ async def finance_forecast():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/finance/bank-accounts", tags=["Finance"])
+async def get_bank_accounts():
+    """Obtiene saldos bancarios detallados por cuenta y divisa."""
+    agent = agent_registry.get("finanzas")
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
+    
+    try:
+        # Obtener saldos por divisa
+        balances_by_currency = agent._get_cash_balance_by_currency()
+        
+        # Obtener detalle por cuenta bancaria
+        bank_accounts = agent._get_bank_accounts_detail()
+        
+        # Agrupar por divisa
+        accounts_by_currency = {}
+        for acc in bank_accounts:
+            currency = acc.get("currency", agent.default_currency)
+            if currency not in accounts_by_currency:
+                accounts_by_currency[currency] = []
+            accounts_by_currency[currency].append({
+                "name": acc["name"],
+                "balance": acc["balance"],
+                "currency": currency,
+            })
+        
+        return {
+            "balances_by_currency": balances_by_currency,
+            "accounts_by_currency": accounts_by_currency,
+            "total_accounts": len(bank_accounts),
+            "currencies": list(balances_by_currency.keys()),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo saldos bancarios: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/companies", tags=["Companies"])
+async def list_companies():
+    """Lista todas las compañías disponibles en Odoo."""
+    try:
+        from aria.odoo_client import OdooClient
+        odoo = OdooClient.get_instance()
+        
+        companies = odoo.search_read(
+            "res.company",
+            [],
+            ["id", "name", "currency_id"],
+            limit=100
+        )
+        
+        return {
+            "companies": [
+                {
+                    "id": c["id"],
+                    "name": c.get("name", f"Company {c['id']}"),
+                    "currency": c.get("currency_id", [0, "MXN"])[1] if c.get("currency_id") else "MXN",
+                }
+                for c in companies
+            ],
+            "total": len(companies),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo compañías: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/finance/budgets", tags=["Finance"])
 async def get_budgets():
     """Obtiene presupuestos actuales desde todas las fuentes."""

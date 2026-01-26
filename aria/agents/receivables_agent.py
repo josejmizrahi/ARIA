@@ -38,9 +38,9 @@ class ReceivablesAgent(BaseAgent):
             description="Gestión de cuentas por cobrar y recuperación de cartera"
         )
         
-        # Compañía a monitorear (None = todas)
-        # Para coincidir con reportes de Odoo, debe especificarse la compañía
-        self.company_id = company_id
+        # Compañía a monitorear (default desde settings)
+        from aria.config import settings
+        self.company_id = company_id or settings.odoo.company_id
         
         # Configuración de escalamiento
         self.escalation_levels = {
@@ -618,7 +618,7 @@ Documentos: {len(due_this_week)}
         
         return result
     
-    def _get_all_receivables(self) -> list[dict]:
+    def _get_all_receivables(self, company_id: int | None = None) -> list[dict]:
         """
         Obtiene TODAS las partidas de cuentas por cobrar pendientes (vencidas y por vencer).
         Útil para el análisis completo de cartera.
