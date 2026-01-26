@@ -28,8 +28,10 @@ from aria.approval_engine import approval_engine
 from aria.scheduler import task_scheduler
 from aria.reports.scheduler import report_scheduler
 from aria.utils.logger import get_logger
+from aria.cache import get_cache
 
 logger = get_logger("aria.api")
+cache = get_cache()
 
 
 # ==================== Pydantic Models ====================
@@ -368,6 +370,14 @@ async def reject_proposal(proposal_id: str, action: ProposalAction = None):
 async def dashboard():
     """Obtiene datos consolidados para el dashboard."""
     
+    # Intentar obtener del caché (TTL de 30 segundos)
+    cached = cache.get("dashboard", "main")
+    if cached is not None:
+        logger.debug("Dashboard cache hit")
+        return cached
+    
+    logger.debug("Dashboard cache miss, ejecutando consultas...")
+    
     # Propuestas pendientes
     pending = await approval_engine.get_pending()
     
@@ -379,15 +389,27 @@ async def dashboard():
             by_priority[priority] += 1
     
     # Resúmenes de agentes (excluyendo CEO para evitar recursión)
+    # Cachear individualmente cada agente para mejor rendimiento
     agent_summaries = {}
     for name, agent in agent_registry.list_all().items():
         if name != "ceo":
             try:
-                agent_summaries[name] = await agent.get_status_summary()
+                # Intentar obtener del caché individual del agente
+                agent_cache_key = f"agent_summary_{name}"
+                cached_summary = cache.get("dashboard", agent_cache_key)
+                
+                if cached_summary is not None:
+                    agent_summaries[name] = cached_summary
+                else:
+                    # Ejecutar y cachear
+                    summary = await agent.get_status_summary()
+                    cache.set("dashboard", summary, ttl_seconds=30, prefix=agent_cache_key)
+                    agent_summaries[name] = summary
             except Exception as e:
+                logger.error(f"Error obteniendo resumen del agente {name}: {e}")
                 agent_summaries[name] = {"status": "error", "error": str(e)}
     
-    return {
+    result = {
         "timestamp": datetime.now().isoformat(),
         "pending_proposals": {
             "total": len(pending),
@@ -395,6 +417,11 @@ async def dashboard():
         },
         "agents": agent_summaries,
     }
+    
+    # Cachear resultado completo por 30 segundos
+    cache.set("dashboard", result, ttl_seconds=30, prefix="main")
+    
+    return result
 
 
 @app.get("/api/finance/metrics", tags=["Finance"])
@@ -436,15 +463,27 @@ async def finance_ratios():
     if not agent:
         raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
     
+    # Intentar obtener del caché (TTL de 5 minutos para análisis pesados)
+    cached = cache.get("finance", "ratios")
+    if cached is not None:
+        logger.debug("Finance ratios cache hit")
+        return cached
+    
     try:
+        logger.debug("Finance ratios cache miss, ejecutando análisis...")
         # Ejecutar tarea de análisis financiero
         result = await agent.run_task("financial_analysis")
         
-        return {
+        response = {
             "success": result.success,
             "data": result.data,
             "executed_at": result.completed_at.isoformat() if result.completed_at else None,
         }
+        
+        # Cachear resultado por 5 minutos
+        cache.set("finance", response, ttl_seconds=300, prefix="ratios")
+        
+        return response
     except Exception as e:
         logger.error(f"Error ejecutando análisis de ratios: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -458,14 +497,26 @@ async def finance_budget():
     if not agent:
         raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
     
+    # Intentar obtener del caché (TTL de 5 minutos)
+    cached = cache.get("finance", "budget")
+    if cached is not None:
+        logger.debug("Finance budget cache hit")
+        return cached
+    
     try:
+        logger.debug("Finance budget cache miss, ejecutando comparación...")
         result = await agent.run_task("budget_comparison")
         
-        return {
+        response = {
             "success": result.success,
             "data": result.data,
             "executed_at": result.completed_at.isoformat() if result.completed_at else None,
         }
+        
+        # Cachear resultado por 5 minutos
+        cache.set("finance", response, ttl_seconds=300, prefix="budget")
+        
+        return response
     except Exception as e:
         logger.error(f"Error ejecutando comparación de presupuesto: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -479,14 +530,26 @@ async def finance_profitability():
     if not agent:
         raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
     
+    # Intentar obtener del caché (TTL de 5 minutos)
+    cached = cache.get("finance", "profitability")
+    if cached is not None:
+        logger.debug("Finance profitability cache hit")
+        return cached
+    
     try:
+        logger.debug("Finance profitability cache miss, ejecutando análisis...")
         result = await agent.run_task("profitability_analysis")
         
-        return {
+        response = {
             "success": result.success,
             "data": result.data,
             "executed_at": result.completed_at.isoformat() if result.completed_at else None,
         }
+        
+        # Cachear resultado por 5 minutos
+        cache.set("finance", response, ttl_seconds=300, prefix="profitability")
+        
+        return response
     except Exception as e:
         logger.error(f"Error ejecutando análisis de rentabilidad: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -497,17 +560,29 @@ async def finance_forecast():
     """Ejecuta proyecciones anuales y retorna resultados."""
     agent = agent_registry.get("finanzas")
     
+    # Intentar obtener del caché (TTL de 10 minutos para proyecciones)
+    cached = cache.get("finance", "forecast")
+    if cached is not None:
+        logger.debug("Finance forecast cache hit")
+        return cached
+    
     if not agent:
         raise HTTPException(status_code=404, detail="Agente de finanzas no encontrado")
     
     try:
+        logger.debug("Finance forecast cache miss, ejecutando proyecciones...")
         result = await agent.run_task("annual_forecast")
         
-        return {
+        response = {
             "success": result.success,
             "data": result.data,
             "executed_at": result.completed_at.isoformat() if result.completed_at else None,
         }
+        
+        # Cachear resultado por 10 minutos (proyecciones cambian menos frecuentemente)
+        cache.set("finance", response, ttl_seconds=600, prefix="forecast")
+        
+        return response
     except Exception as e:
         logger.error(f"Error ejecutando proyecciones: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -548,6 +623,36 @@ async def get_bank_accounts():
         }
     except Exception as e:
         logger.error(f"Error obteniendo saldos bancarios: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/cache", tags=["Cache"])
+async def clear_cache(prefix: Optional[str] = Query(None, description="Prefijo del caché a limpiar (opcional)")):
+    """Limpia el caché. Si se especifica prefix, solo limpia ese prefijo."""
+    try:
+        cache.clear(prefix)
+        stats = cache.get_stats()
+        return {
+            "success": True,
+            "message": f"Caché limpiado{' (prefijo: ' + prefix + ')' if prefix else ''}",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error limpiando caché: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/cache/stats", tags=["Cache"])
+async def cache_stats():
+    """Retorna estadísticas del caché."""
+    try:
+        stats = cache.get_stats()
+        return {
+            "success": True,
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas del caché: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
