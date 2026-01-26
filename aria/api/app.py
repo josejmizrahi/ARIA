@@ -528,12 +528,16 @@ async def get_budgets():
         budget_manager = get_budget_manager(settings.odoo.company_id)
         budgets = budget_manager.get_budgets(agent.odoo)
         
+        # Verificar qué modelos están disponibles
+        available_models = budget_manager._check_budget_models_available(agent.odoo)
+        
         return {
             "budgets": budgets,
             "monthly_revenue": budgets.get("monthly_revenue", 0),
             "monthly_expenses": budgets.get("monthly_expenses", 0),
             "by_category": budgets.get("by_category", {}),
             "source": budgets.get("source", "unknown"),
+            "available_models": available_models,
         }
     except Exception as e:
         logger.error(f"Error obteniendo presupuestos: {e}")

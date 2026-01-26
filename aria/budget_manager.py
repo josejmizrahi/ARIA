@@ -52,17 +52,59 @@ class BudgetManager:
         except Exception as e:
             logger.error(f"Error guardando presupuestos: {e}")
     
-    def _load_budgets_from_odoo(self, odoo_client) -> Optional[dict]:
+    def _check_budget_models_available(self, odoo_client) -> dict[str, bool]:
         """
-        Intenta cargar presupuestos desde el módulo account.budget de Odoo.
+        Verifica qué modelos de presupuestos están disponibles en Odoo.
         
         Returns:
-            Dict con presupuestos o None si el módulo no está disponible
+            Dict con modelos disponibles: {"account.budget": True, ...}
         """
+        available = {}
+        models_to_check = [
+            "account.budget",
+            "account.budget.line",
+            "account.budget.post",
+            "crossovered.budget",  # Versión antigua
+            "crossovered.budget.lines",
+        ]
+        
+        for model_name in models_to_check:
+            try:
+                odoo_client.execute(model_name, "check_access_rights", ["read"], {"raise_exception": False})
+                available[model_name] = True
+            except Exception:
+                available[model_name] = False
+        
+        return available
+    
+    def _load_budgets_from_odoo(self, odoo_client) -> Optional[dict]:
+        """
+        Intenta cargar presupuestos desde módulos de presupuestos de Odoo.
+        
+        Prioridad:
+        1. account.budget (módulo moderno)
+        2. crossovered.budget (versión antigua)
+        
+        Returns:
+            Dict con presupuestos o None si ningún módulo está disponible
+        """
+        # Verificar qué modelos están disponibles
+        available_models = self._check_budget_models_available(odoo_client)
+        
+        # Intentar con account.budget primero (versión moderna)
+        if available_models.get("account.budget"):
+            return self._load_from_account_budget(odoo_client)
+        
+        # Intentar con crossovered.budget (versión antigua)
+        if available_models.get("crossovered.budget"):
+            return self._load_from_crossovered_budget(odoo_client)
+        
+        logger.debug("No se encontraron módulos de presupuestos en Odoo")
+        return None
+    
+    def _load_from_account_budget(self, odoo_client) -> Optional[dict]:
+        """Carga presupuestos desde account.budget (módulo moderno)."""
         try:
-            # Verificar si el modelo existe
-            odoo_client.execute("account.budget", "check_access_rights", ["read"], {"raise_exception": False})
-            
             # Obtener año actual
             current_year = datetime.now().year
             current_month = datetime.now().month
@@ -79,6 +121,7 @@ class BudgetManager:
             )
             
             if not budget_ids:
+                logger.debug("No se encontraron presupuestos activos en account.budget")
                 return None
             
             # Leer presupuesto
@@ -93,7 +136,7 @@ class BudgetManager:
             
             # Procesar líneas de presupuesto
             result = {
-                "source": "odoo",
+                "source": "odoo_account_budget",
                 "budget_id": budget["id"],
                 "name": budget.get("name", ""),
                 "monthly_revenue": 0,
@@ -110,25 +153,108 @@ class BudgetManager:
                 for line in lines:
                     account_id = line.get("account_id")
                     if account_id:
+                        account_id_value = account_id[0] if isinstance(account_id, list) else account_id
                         account_name = account_id[1] if isinstance(account_id, list) else "Sin nombre"
                         amount = abs(line.get("planned_amount", 0))
                         
                         # Determinar si es ingreso o gasto basado en tipo de cuenta
-                        account_info = odoo_client.read("account.account", [account_id[0] if isinstance(account_id, list) else account_id], ["account_type"])
-                        if account_info:
-                            account_type = account_info[0].get("account_type", "")
-                            
-                            if account_type in ["income", "income_other"]:
-                                result["monthly_revenue"] += amount
-                            elif account_type in ["expense", "expense_depreciation", "expense_direct_cost"]:
-                                result["monthly_expenses"] += amount
-                                result["by_category"][account_name] = amount
+                        try:
+                            account_info = odoo_client.read("account.account", [account_id_value], ["account_type"])
+                            if account_info:
+                                account_type = account_info[0].get("account_type", "")
+                                
+                                if account_type in ["income", "income_other"]:
+                                    result["monthly_revenue"] += amount
+                                elif account_type in ["expense", "expense_depreciation", "expense_direct_cost"]:
+                                    result["monthly_expenses"] += amount
+                                    result["by_category"][account_name] = amount
+                        except Exception:
+                            # Si no se puede determinar, asumir gasto
+                            result["monthly_expenses"] += amount
+                            result["by_category"][account_name] = amount
             
-            logger.info(f"Presupuestos cargados desde Odoo: {result['name']}")
+            logger.info(f"Presupuestos cargados desde account.budget: {result['name']}")
             return result
             
         except Exception as e:
-            logger.debug(f"Módulo account.budget no disponible o error: {e}")
+            logger.debug(f"Error cargando desde account.budget: {e}")
+            return None
+    
+    def _load_from_crossovered_budget(self, odoo_client) -> Optional[dict]:
+        """Carga presupuestos desde crossovered.budget (versión antigua)."""
+        try:
+            # Obtener año actual
+            current_year = datetime.now().year
+            current_month = datetime.now().month
+            
+            # Buscar presupuestos activos
+            budget_ids = odoo_client.search(
+                "crossovered.budget",
+                [
+                    ("company_id", "=", self.company_id),
+                    ("date_from", "<=", f"{current_year}-{current_month:02d}-01"),
+                    ("date_to", ">=", f"{current_year}-{current_month:02d}-28"),
+                    ("state", "=", "done"),  # Solo presupuestos confirmados
+                ],
+                limit=1
+            )
+            
+            if not budget_ids:
+                logger.debug("No se encontraron presupuestos activos en crossovered.budget")
+                return None
+            
+            # Leer presupuesto
+            budgets = odoo_client.read("crossovered.budget", budget_ids, [
+                "name", "date_from", "date_to", "crossovered_budget_line_ids"
+            ])
+            
+            if not budgets:
+                return None
+            
+            budget = budgets[0]
+            
+            result = {
+                "source": "odoo_crossovered_budget",
+                "budget_id": budget["id"],
+                "name": budget.get("name", ""),
+                "monthly_revenue": 0,
+                "monthly_expenses": 0,
+                "by_category": {},
+            }
+            
+            # Leer líneas de presupuesto
+            if budget.get("crossovered_budget_line_ids"):
+                lines = odoo_client.read("crossovered.budget.lines", budget["crossovered_budget_line_ids"], [
+                    "general_budget_id", "date_from", "date_to", "planned_amount", "account_id"
+                ])
+                
+                for line in lines:
+                    amount = abs(line.get("planned_amount", 0))
+                    account_id = line.get("account_id")
+                    
+                    if account_id:
+                        account_id_value = account_id[0] if isinstance(account_id, list) else account_id
+                        account_name = account_id[1] if isinstance(account_id, list) else "Sin nombre"
+                        
+                        try:
+                            account_info = odoo_client.read("account.account", [account_id_value], ["account_type"])
+                            if account_info:
+                                account_type = account_info[0].get("account_type", "")
+                                
+                                if account_type in ["income", "income_other"]:
+                                    result["monthly_revenue"] += amount
+                                elif account_type in ["expense", "expense_depreciation", "expense_direct_cost"]:
+                                    result["monthly_expenses"] += amount
+                                    result["by_category"][account_name] = amount
+                        except Exception:
+                            result["monthly_expenses"] += amount
+                            result["by_category"][account_name] = amount
+            
+            logger.info(f"Presupuestos cargados desde crossovered.budget: {result['name']}")
+            return result
+            
+        except Exception as e:
+            logger.debug(f"Error cargando desde crossovered.budget: {e}")
             return None
     
     def _calculate_budgets_from_history(self, odoo_client, months: int = 6) -> dict:
