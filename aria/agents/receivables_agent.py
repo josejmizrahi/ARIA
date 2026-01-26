@@ -656,44 +656,52 @@ Documentos: {len(due_this_week)}
             messages = self.check_messages(unread_only=True)
             
             for msg_data in messages:
-                msg_id = msg_data.get("id")
-                msg_type = msg_data.get("message_type")
-                from_agent = msg_data.get("from_agent")
-                content = msg_data.get("content", "")
-                data = msg_data.get("data", {})
-                
-                # Responder a consultas sobre proyección de cobranza
-                if msg_type == "alert" and "cobranza" in content.lower():
-                    weeks = data.get("weeks", 4)
-                    company_id = data.get("company_id", self.company_id)
+                try:
+                    from uuid import UUID
+                    msg_id = UUID(msg_data.get("id"))
+                    msg_type = msg_data.get("message_type")
+                    from_agent = msg_data.get("from_agent")
+                    content = msg_data.get("content", "")
+                    data = msg_data.get("data", {})
                     
-                    # Calcular proyección de cobranza
-                    total_expected = 0
-                    for week in range(1, weeks + 1):
-                        days_end = week * 7
+                    # Responder a consultas sobre proyección de cobranza
+                    if msg_type == "alert" and ("cobranza" in content.lower() or "proyección" in content.lower()):
+                        weeks = data.get("weeks", 4)
+                        company_id = data.get("company_id", self.company_id)
+                        
+                        # Calcular proyección de cobranza
+                        total_expected = 0
                         receivables = self._get_all_receivables()
-                        week_collections = sum(
-                            r.get("amount_residual", 0) for r in receivables
-                            if self._days_until_due(r.get("date_maturity", "")) <= days_end
-                            and self._days_until_due(r.get("date_maturity", "")) > (week - 1) * 7
+                        
+                        for week in range(1, weeks + 1):
+                            days_start = (week - 1) * 7
+                            days_end = week * 7
+                            week_collections = sum(
+                                r.get("amount_residual", 0) for r in receivables
+                                if self._days_until_due(r.get("date_maturity", "")) <= days_end
+                                and self._days_until_due(r.get("date_maturity", "")) > days_start
+                            )
+                            total_expected += week_collections
+                        
+                        # Responder
+                        await self.respond_to_agent(
+                            message_id=str(msg_id),
+                            response=f"Proyección de cobranza para {weeks} semanas: {self.format_currency(total_expected)}",
+                            data={
+                                "weeks": weeks,
+                                "total_expected": total_expected,
+                                "company_id": company_id,
+                            }
                         )
-                        total_expected += week_collections
+                        
+                        self.logger.info(f"Respondido a {from_agent} sobre proyección de cobranza")
                     
-                    # Responder
-                    await self.respond_to_agent(
-                        message_id=msg_id,
-                        response=f"Proyección de cobranza para {weeks} semanas: {self.format_currency(total_expected)}",
-                        data={
-                            "weeks": weeks,
-                            "total_expected": total_expected,
-                            "company_id": company_id,
-                        }
-                    )
+                    # Marcar como leído
+                    self.messaging.mark_read(msg_id, self.name)
                     
-                    self.logger.info(f"Respondido a {from_agent} sobre proyección de cobranza")
-                
-                # Marcar como leído
-                self.messaging.mark_read(msg_id, self.name)
+                except Exception as msg_error:
+                    self.logger.warning(f"Error procesando mensaje individual: {msg_error}")
+                    continue
                 
         except Exception as e:
             self.logger.warning(f"Error procesando mensajes pendientes: {e}")

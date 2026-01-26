@@ -244,7 +244,7 @@ class BaseAgent(ABC):
         # El otro agente debe responder manualmente por ahora
         return None
     
-    def check_messages(self, unread_only: bool = True) -> list:
+    def check_messages(self, unread_only: bool = True) -> list[dict]:
         """Revisa mensajes recibidos."""
         from aria.agent_messaging import MessageType
         
@@ -253,7 +253,15 @@ class BaseAgent(ABC):
             unread_only=unread_only,
         )
         
-        return [m.model_dump() for m in messages]
+        # Convertir a dict y marcar como leído si es necesario
+        result = []
+        for msg in messages:
+            msg_dict = msg.model_dump()
+            result.append(msg_dict)
+            if not unread_only:
+                self.messaging.mark_read(msg.id, self.name)
+        
+        return result
     
     # ==================== Métodos Abstractos ====================
     
@@ -323,7 +331,7 @@ class BaseAgent(ABC):
     
     async def run_task(self, task: TaskDefinition) -> TaskResult:
         """
-        Ejecuta una tarea específica.
+        Ejecuta una tarea específica con introspección y aprendizaje.
         
         Args:
             task: Tarea a ejecutar
@@ -334,6 +342,12 @@ class BaseAgent(ABC):
         started_at = datetime.now()
         self.logger.info(f"Ejecutando tarea: {task.name}")
         
+        # Procesar mensajes pendientes antes de ejecutar
+        try:
+            await self._process_pending_messages()
+        except Exception as e:
+            self.logger.warning(f"Error procesando mensajes pendientes: {e}")
+        
         try:
             # Obtener método y ejecutar
             method = getattr(self, task.method)
@@ -343,6 +357,15 @@ class BaseAgent(ABC):
             if isinstance(result, TaskResult):
                 task.last_result = result
                 task.last_run = datetime.now()
+                
+                # Aprender de la ejecución exitosa
+                if result.success:
+                    self.learning.record_success(
+                        self.name,
+                        f"task_{task.name}",
+                        {"task": task.name, "method": task.method}
+                    )
+                
                 return result
             
             # Si no, crear TaskResult genérico
@@ -358,6 +381,13 @@ class BaseAgent(ABC):
             task.last_result = task_result
             task.last_run = datetime.now()
             
+            # Aprender de éxito
+            self.learning.record_success(
+                self.name,
+                f"task_{task.name}",
+                {"task": task.name, "method": task.method}
+            )
+            
             self.logger.info(
                 f"Tarea completada: {task.name}",
                 duration=f"{task_result.duration_seconds:.2f}s"
@@ -368,6 +398,21 @@ class BaseAgent(ABC):
         except Exception as e:
             error_tb = traceback.format_exc()
             self.logger.error(f"Error en tarea {task.name}: {e}")
+            
+            # Aprender del error
+            self.learning.record_failure(
+                self.name,
+                f"task_{task.name}",
+                {"task": task.name, "error": str(e)}
+            )
+            
+            # Intentar aprender de logs
+            try:
+                from pathlib import Path
+                log_file = Path(settings.log_dir) / "aria.log"
+                self.learning.learn_from_logs(self.name, log_file)
+            except Exception as learn_error:
+                self.logger.warning(f"Error aprendiendo de logs: {learn_error}")
             
             task_result = TaskResult(
                 task_name=task.name,
@@ -383,6 +428,19 @@ class BaseAgent(ABC):
             task.last_run = datetime.now()
             
             return task_result
+    
+    async def _process_pending_messages(self) -> None:
+        """Procesa mensajes pendientes (puede ser sobrescrito por agentes específicos)."""
+        # Por defecto, solo marca como leído
+        # Los agentes pueden sobrescribir para responder automáticamente
+        messages = self.check_messages(unread_only=True)
+        for msg in messages:
+            try:
+                from uuid import UUID
+                msg_id = UUID(msg.get("id"))
+                self.messaging.mark_read(msg_id, self.name)
+            except Exception:
+                pass
     
     async def run_all_tasks(self) -> list[TaskResult]:
         """
