@@ -1,12 +1,17 @@
 """
-Agente de Finanzas - Tesorería y flujo de caja.
+Agente de Finanzas - Planeación Financiera Profesional.
 
-Monitorea saldos bancarios, proyecciones de flujo,
-pagos próximos y alertas de liquidez.
+Sistema completo de planeación financiera que incluye:
+- Análisis financiero avanzado (ratios, tendencias, variaciones)
+- Presupuestos y proyecciones (real vs presupuestado, escenarios)
+- Análisis de rentabilidad (centros de costo, márgenes, punto de equilibrio)
+- Recomendaciones estratégicas (optimización de flujo, financiamiento)
+- Reportes ejecutivos (KPIs, dashboards, alertas proactivas)
 """
 
 from datetime import datetime, timedelta
 from typing import Any
+from collections import defaultdict
 
 from aria.agents.base import BaseAgent
 from aria.config import settings
@@ -16,13 +21,15 @@ from aria.models.proposal import Priority
 
 class FinanceAgent(BaseAgent):
     """
-    Agente autónomo para gestión de tesorería y finanzas.
+    Agente autónomo para planeación financiera profesional.
     
-    Monitorea:
-    - Proyección de flujo de caja (4 semanas)
-    - Saldos bancarios (separados por divisa)
-    - Pagos próximos vs disponible
-    - Reporte semanal de tesorería
+    Funcionalidades:
+    - Proyección de flujo de caja (4 semanas y anual)
+    - Análisis financiero avanzado (ratios, tendencias)
+    - Presupuestos y comparación real vs presupuestado
+    - Análisis de rentabilidad por centro de costo
+    - Recomendaciones estratégicas de optimización
+    - Reportes ejecutivos y KPIs financieros
     
     Filtros:
     - company_id: Configurable desde settings (ODOO_COMPANY_ID)
@@ -34,7 +41,7 @@ class FinanceAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             name="finanzas",
-            description="Tesorería, flujo de caja y gestión de liquidez"
+            description="Planeación financiera profesional, tesorería y análisis estratégico"
         )
         
         # Configuración desde settings
@@ -45,6 +52,10 @@ class FinanceAgent(BaseAgent):
         self.critical_runway_days = 7  # Días críticos de runway
         self.warning_runway_days = 14  # Días de advertencia
         self.projection_weeks = 4  # Semanas de proyección
+        
+        # Configuración de presupuestos (configurable desde settings o .env)
+        self.monthly_budget = 24_500_000  # Presupuesto mensual por defecto
+        self.annual_budget = self.monthly_budget * 12  # Presupuesto anual
     
     def _register_tasks(self) -> None:
         """Registra las tareas del agente de finanzas."""
@@ -73,6 +84,38 @@ class FinanceAgent(BaseAgent):
             description="Verifica pagos próximos vs disponible"
         ))
         
+        # Análisis financiero avanzado
+        self.register_task(TaskDefinition(
+            name="financial_analysis",
+            method="analyze_financial_ratios",
+            schedule="0 10 * * 1",  # Lunes 10:00 AM
+            description="Análisis de ratios financieros y tendencias"
+        ))
+        
+        # Comparación vs presupuesto
+        self.register_task(TaskDefinition(
+            name="budget_comparison",
+            method="compare_vs_budget",
+            schedule="0 8 * * 1",  # Lunes 8:00 AM (inicio de semana)
+            description="Compara resultados reales vs presupuestado"
+        ))
+        
+        # Análisis de rentabilidad
+        self.register_task(TaskDefinition(
+            name="profitability_analysis",
+            method="analyze_profitability",
+            schedule="0 11 * * 1",  # Lunes 11:00 AM
+            description="Análisis de rentabilidad por centro de costo"
+        ))
+        
+        # Proyecciones anuales
+        self.register_task(TaskDefinition(
+            name="annual_forecast",
+            method="generate_annual_forecast",
+            schedule="0 9 1 * *",  # Día 1 de cada mes 9:00 AM
+            description="Genera proyecciones anuales con escenarios"
+        ))
+        
         # Reporte semanal
         self.register_task(TaskDefinition(
             name="weekly_report",
@@ -80,9 +123,17 @@ class FinanceAgent(BaseAgent):
             schedule="0 17 * * 5",  # Viernes 5:00 PM
             description="Genera reporte semanal de tesorería"
         ))
+        
+        # Reporte ejecutivo mensual
+        self.register_task(TaskDefinition(
+            name="monthly_executive_report",
+            method="generate_executive_report",
+            schedule="0 9 1 * *",  # Día 1 de cada mes 9:00 AM
+            description="Reporte ejecutivo mensual con KPIs y recomendaciones"
+        ))
     
     async def get_status_summary(self) -> dict[str, Any]:
-        """Retorna resumen del estado de finanzas."""
+        """Retorna resumen del estado de finanzas con métricas avanzadas."""
         
         # Saldos por divisa
         balances_by_currency = self._get_cash_balance_by_currency()
@@ -99,12 +150,35 @@ class FinanceAgent(BaseAgent):
         expected_collections = self._get_expected_collections(days=7)
         total_expected = sum(c.get("amount_residual", 0) for c in expected_collections)
         
+        # Métricas del mes actual
+        month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+        month_end = datetime.now().strftime("%Y-%m-%d")
+        
+        invoices = self.search_read(
+            "account.move",
+            [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("invoice_date", ">=", month_start),
+                ("invoice_date", "<=", month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount_total"],
+            limit=500
+        )
+        monthly_revenue = sum(i.get("amount_total", 0) for i in invoices)
+        
+        # Cumplimiento de presupuesto
+        budget_compliance = (monthly_revenue / self.monthly_budget * 100) if self.monthly_budget > 0 else 0
+        
         # Determinar estado
         if cash_local < 0 or runway <= self.critical_runway_days:
             status = "critical"
         elif runway <= self.warning_runway_days:
             status = "warning"
         elif total_upcoming > cash_local + total_expected:
+            status = "warning"
+        elif budget_compliance < 80:
             status = "warning"
         else:
             status = "ok"
@@ -120,6 +194,9 @@ class FinanceAgent(BaseAgent):
             "upcoming_payments_7d": total_upcoming,
             "expected_collections_7d": total_expected,
             "net_position_7d": cash_local + total_expected - total_upcoming,
+            "monthly_revenue": monthly_revenue,
+            "monthly_budget": self.monthly_budget,
+            "budget_compliance": budget_compliance,
             "last_updated": datetime.now().isoformat(),
         }
     
@@ -760,6 +837,664 @@ _¡Buen fin de semana!_
             ["partner_id", "amount_residual", "invoice_date_due", "currency_id"],
             limit=200,
             order="invoice_date_due asc"
+        )
+    
+    # ==================== Planeación Financiera Profesional ====================
+    
+    async def analyze_financial_ratios(self) -> TaskResult:
+        """Análisis avanzado de ratios financieros y tendencias."""
+        started_at = datetime.now()
+        
+        self.logger.info("Analizando ratios financieros...")
+        
+        # Obtener datos históricos (últimos 3 meses)
+        months_data = []
+        for i in range(3):
+            month_start = (datetime.now() - timedelta(days=30*(i+1))).strftime("%Y-%m-%d")
+            month_end = (datetime.now() - timedelta(days=30*i)).strftime("%Y-%m-%d")
+            
+            # Ingresos del mes
+            invoices = self.search_read(
+                "account.move",
+                [
+                    ("move_type", "=", "out_invoice"),
+                    ("state", "=", "posted"),
+                    ("invoice_date", ">=", month_start),
+                    ("invoice_date", "<=", month_end),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["amount_total", "amount_residual"],
+                limit=1000
+            )
+            revenue = sum(i.get("amount_total", 0) for i in invoices)
+            
+            # Gastos del mes
+            expenses = self.search_read(
+                "account.payment",
+                [
+                    ("payment_type", "=", "outbound"),
+                    ("state", "=", "posted"),
+                    ("date", ">=", month_start),
+                    ("date", "<=", month_end),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["amount"],
+                limit=1000
+            )
+            expenses_total = sum(e.get("amount", 0) for e in expenses)
+            
+            months_data.append({
+                "month": month_start[:7],
+                "revenue": revenue,
+                "expenses": expenses_total,
+                "net": revenue - expenses_total,
+            })
+        
+        # Calcular ratios
+        current_month = months_data[0] if months_data else {}
+        prev_month = months_data[1] if len(months_data) > 1 else {}
+        
+        # Margen neto
+        net_margin = (current_month.get("net", 0) / current_month.get("revenue", 1) * 100) if current_month.get("revenue", 0) > 0 else 0
+        
+        # Crecimiento de ingresos
+        revenue_growth = 0
+        if prev_month.get("revenue", 0) > 0:
+            revenue_growth = ((current_month.get("revenue", 0) - prev_month.get("revenue", 0)) / prev_month.get("revenue", 0)) * 100
+        
+        # Ratio de gastos sobre ingresos
+        expense_ratio = (current_month.get("expenses", 0) / current_month.get("revenue", 1) * 100) if current_month.get("revenue", 0) > 0 else 0
+        
+        # Liquidez corriente (simplificado)
+        cash_balance = self._get_cash_balance_by_currency().get(self.default_currency, 0.0)
+        upcoming_payments_30d = sum(p.get("amount_residual", 0) for p in self._get_upcoming_payments(30))
+        current_ratio = cash_balance / upcoming_payments_30d if upcoming_payments_30d > 0 else 999
+        
+        # Construir mensaje
+        message = f"""
+*📊 Análisis Financiero Avanzado*
+
+*Ratios del Mes Actual:*
+• Margen Neto: {net_margin:.1f}%
+• Ratio Gastos/Ingresos: {expense_ratio:.1f}%
+• Liquidez Corriente: {current_ratio:.2f}
+• Crecimiento Ingresos: {revenue_growth:+.1f}%
+
+*Tendencias (últimos 3 meses):*
+| Mes | Ingresos | Gastos | Neto |
+|-----|----------|--------|------|
+        """.strip()
+        
+        for data in reversed(months_data):
+            message += f"\n| {data['month']} | {self.format_currency(data['revenue'])} | {self.format_currency(data['expenses'])} | {self.format_currency(data['net'])} |"
+        
+        # Alertas y recomendaciones
+        proposals_created = 0
+        
+        if net_margin < 10:
+            message += f"\n\n⚠️ *Margen neto bajo ({net_margin:.1f}%)*"
+            await self.propose(
+                title="Margen neto bajo - Revisar estructura de costos",
+                description=f"El margen neto es {net_margin:.1f}%, por debajo del umbral recomendado",
+                priority=Priority.HIGH,
+                situation_summary=f"""
+Margen neto actual: {net_margin:.1f}%
+Ingresos: {self.format_currency(current_month.get('revenue', 0))}
+Gastos: {self.format_currency(current_month.get('expenses', 0))}
+                """.strip(),
+                proposed_action_detail="Revisar estructura de costos y optimizar gastos operativos",
+                supporting_data={"net_margin": net_margin, "months_data": months_data},
+            )
+            proposals_created += 1
+        
+        if expense_ratio > 90:
+            message += f"\n\n⚠️ *Ratio de gastos muy alto ({expense_ratio:.1f}%)*"
+        
+        if current_ratio < 1.0:
+            message += f"\n\n🔴 *Liquidez crítica (ratio {current_ratio:.2f})*"
+            priority = Priority.CRITICAL
+        else:
+            priority = Priority.MEDIUM
+        
+        await self.notify(
+            title="📊 Análisis Financiero - Ratios y Tendencias",
+            message=message,
+            priority=priority,
+        )
+        
+        return TaskResult(
+            task_name="financial_analysis",
+            agent_name=self.name,
+            started_at=started_at,
+            completed_at=datetime.now(),
+            success=True,
+            proposals_created=proposals_created,
+            data={
+                "net_margin": net_margin,
+                "revenue_growth": revenue_growth,
+                "expense_ratio": expense_ratio,
+                "current_ratio": current_ratio,
+                "months_data": months_data,
+            }
+        )
+    
+    async def compare_vs_budget(self) -> TaskResult:
+        """Compara resultados reales vs presupuestado."""
+        started_at = datetime.now()
+        
+        self.logger.info("Comparando vs presupuesto...")
+        
+        # Mes actual
+        month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+        month_end = datetime.now().strftime("%Y-%m-%d")
+        
+        # Ingresos reales del mes
+        invoices = self.search_read(
+            "account.move",
+            [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("invoice_date", ">=", month_start),
+                ("invoice_date", "<=", month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount_total"],
+            limit=1000
+        )
+        actual_revenue = sum(i.get("amount_total", 0) for i in invoices)
+        
+        # Gastos reales del mes
+        expenses = self.search_read(
+            "account.payment",
+            [
+                ("payment_type", "=", "outbound"),
+                ("state", "=", "posted"),
+                ("date", ">=", month_start),
+                ("date", "<=", month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount"],
+            limit=1000
+        )
+        actual_expenses = sum(e.get("amount", 0) for e in expenses)
+        
+        # Calcular días transcurridos del mes
+        days_elapsed = datetime.now().day
+        days_in_month = (datetime.now().replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        days_in_month = days_in_month.day
+        progress_pct = (days_elapsed / days_in_month) * 100
+        
+        # Presupuesto esperado hasta la fecha
+        expected_revenue = self.monthly_budget * (progress_pct / 100)
+        expected_expenses = (self.monthly_budget * 0.7) * (progress_pct / 100)  # Asumiendo 70% gastos
+        
+        # Variaciones
+        revenue_variance = actual_revenue - expected_revenue
+        revenue_variance_pct = (revenue_variance / expected_revenue * 100) if expected_revenue > 0 else 0
+        
+        expense_variance = actual_expenses - expected_expenses
+        expense_variance_pct = (expense_variance / expected_expenses * 100) if expected_expenses > 0 else 0
+        
+        # Proyección al final del mes
+        projected_revenue = (actual_revenue / progress_pct * 100) if progress_pct > 0 else 0
+        projected_expenses = (actual_expenses / progress_pct * 100) if progress_pct > 0 else 0
+        
+        message = f"""
+*💰 Comparativo vs Presupuesto*
+_Mes: {datetime.now().strftime('%B %Y')} ({progress_pct:.0f}% transcurrido)_
+
+*Ingresos:*
+• Real: {self.format_currency(actual_revenue)}
+• Esperado: {self.format_currency(expected_revenue)}
+• Variación: {self.format_currency(revenue_variance)} ({revenue_variance_pct:+.1f}%)
+• Proyección mes: {self.format_currency(projected_revenue)}
+
+*Gastos:*
+• Real: {self.format_currency(actual_expenses)}
+• Esperado: {self.format_currency(expected_expenses)}
+• Variación: {self.format_currency(expense_variance)} ({expense_variance_pct:+.1f}%)
+• Proyección mes: {self.format_currency(projected_expenses)}
+
+*Neto Proyectado:*
+• {self.format_currency(projected_revenue - projected_expenses)}
+        """.strip()
+        
+        proposals_created = 0
+        priority = Priority.MEDIUM
+        
+        # Alertas por desviaciones significativas
+        if revenue_variance_pct < -10:
+            message += f"\n\n⚠️ *Ingresos {abs(revenue_variance_pct):.1f}% por debajo del presupuesto*"
+            await self.propose(
+                title="Desviación negativa en ingresos",
+                description=f"Ingresos {revenue_variance_pct:.1f}% por debajo del presupuesto esperado",
+                priority=Priority.HIGH,
+                situation_summary=f"""
+Presupuesto mensual: {self.format_currency(self.monthly_budget)}
+Ingresos reales: {self.format_currency(actual_revenue)}
+Esperado hasta hoy: {self.format_currency(expected_revenue)}
+Variación: {revenue_variance_pct:.1f}%
+                """.strip(),
+                proposed_action_detail="Acelerar ventas y revisar estrategia comercial",
+                supporting_data={
+                    "actual_revenue": actual_revenue,
+                    "expected_revenue": expected_revenue,
+                    "variance_pct": revenue_variance_pct,
+                },
+            )
+            proposals_created += 1
+            priority = Priority.HIGH
+        
+        if expense_variance_pct > 15:
+            message += f"\n\n⚠️ *Gastos {expense_variance_pct:.1f}% por encima del presupuesto*"
+            await self.propose(
+                title="Desviación positiva en gastos",
+                description=f"Gastos {expense_variance_pct:.1f}% por encima del presupuesto esperado",
+                priority=Priority.HIGH,
+                situation_summary=f"""
+Gastos reales: {self.format_currency(actual_expenses)}
+Esperado hasta hoy: {self.format_currency(expected_expenses)}
+Variación: {expense_variance_pct:.1f}%
+                """.strip(),
+                proposed_action_detail="Revisar gastos y optimizar costos operativos",
+                supporting_data={
+                    "actual_expenses": actual_expenses,
+                    "expected_expenses": expected_expenses,
+                    "variance_pct": expense_variance_pct,
+                },
+            )
+            proposals_created += 1
+        
+        await self.notify(
+            title="💰 Comparativo vs Presupuesto",
+            message=message,
+            priority=priority,
+        )
+        
+        return TaskResult(
+            task_name="budget_comparison",
+            agent_name=self.name,
+            started_at=started_at,
+            completed_at=datetime.now(),
+            success=True,
+            proposals_created=proposals_created,
+            data={
+                "actual_revenue": actual_revenue,
+                "expected_revenue": expected_revenue,
+                "revenue_variance_pct": revenue_variance_pct,
+                "actual_expenses": actual_expenses,
+                "expected_expenses": expected_expenses,
+                "expense_variance_pct": expense_variance_pct,
+                "projected_revenue": projected_revenue,
+                "projected_expenses": projected_expenses,
+            }
+        )
+    
+    async def analyze_profitability(self) -> TaskResult:
+        """Análisis de rentabilidad por centro de costo."""
+        started_at = datetime.now()
+        
+        self.logger.info("Analizando rentabilidad...")
+        
+        # Obtener ingresos y gastos del mes actual
+        month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+        month_end = datetime.now().strftime("%Y-%m-%d")
+        
+        # Ingresos totales
+        invoices = self.search_read(
+            "account.move",
+            [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("invoice_date", ">=", month_start),
+                ("invoice_date", "<=", month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount_total"],
+            limit=1000
+        )
+        total_revenue = sum(i.get("amount_total", 0) for i in invoices)
+        
+        # Gastos por categoría (usando cuentas contables)
+        # Buscar cuentas de gastos
+        expense_accounts = self.search_read(
+            "account.account",
+            [
+                ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
+                ("company_id", "=", self.company_id),
+            ],
+            ["id", "name", "code"],
+            limit=50
+        )
+        
+        expenses_by_category = {}
+        for account in expense_accounts:
+            account_id = account["id"]
+            account_name = account.get("name", "Sin nombre")
+            
+            # Movimientos del mes
+            lines = self.search_read(
+                "account.move.line",
+                [
+                    ("account_id", "=", account_id),
+                    ("parent_state", "=", "posted"),
+                    ("date", ">=", month_start),
+                    ("date", "<=", month_end),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["balance"],
+                limit=1000
+            )
+            
+            total = abs(sum(l.get("balance", 0) for l in lines))
+            if total > 0:
+                expenses_by_category[account_name] = total
+        
+        # Calcular margen de contribución
+        total_expenses = sum(expenses_by_category.values())
+        contribution_margin = total_revenue - total_expenses
+        margin_pct = (contribution_margin / total_revenue * 100) if total_revenue > 0 else 0
+        
+        # Punto de equilibrio (simplificado)
+        # Asumiendo gastos fijos = 70% de gastos totales
+        fixed_costs = total_expenses * 0.7
+        variable_costs = total_expenses * 0.3
+        break_even = fixed_costs / (1 - (variable_costs / total_revenue)) if total_revenue > 0 else 0
+        
+        message = f"""
+*📈 Análisis de Rentabilidad*
+
+*Resumen del Mes:*
+• Ingresos Totales: {self.format_currency(total_revenue)}
+• Gastos Totales: {self.format_currency(total_expenses)}
+• Margen de Contribución: {self.format_currency(contribution_margin)} ({margin_pct:.1f}%)
+• Punto de Equilibrio: {self.format_currency(break_even)}
+
+*Gastos por Categoría (Top 10):*
+        """.strip()
+        
+        # Top 10 categorías de gasto
+        sorted_expenses = sorted(expenses_by_category.items(), key=lambda x: x[1], reverse=True)[:10]
+        for category, amount in sorted_expenses:
+            pct = (amount / total_expenses * 100) if total_expenses > 0 else 0
+            message += f"\n• {category[:30]}: {self.format_currency(amount)} ({pct:.1f}%)"
+        
+        priority = Priority.MEDIUM
+        
+        if margin_pct < 20:
+            message += f"\n\n⚠️ *Margen de contribución bajo ({margin_pct:.1f}%)*"
+            priority = Priority.HIGH
+        
+        await self.notify(
+            title="📈 Análisis de Rentabilidad",
+            message=message,
+            priority=priority,
+        )
+        
+        return TaskResult(
+            task_name="profitability_analysis",
+            agent_name=self.name,
+            started_at=started_at,
+            completed_at=datetime.now(),
+            success=True,
+            data={
+                "total_revenue": total_revenue,
+                "total_expenses": total_expenses,
+                "contribution_margin": contribution_margin,
+                "margin_pct": margin_pct,
+                "break_even": break_even,
+                "expenses_by_category": expenses_by_category,
+            }
+        )
+    
+    async def generate_annual_forecast(self) -> TaskResult:
+        """Genera proyecciones anuales con múltiples escenarios."""
+        started_at = datetime.now()
+        
+        self.logger.info("Generando proyecciones anuales...")
+        
+        # Obtener datos históricos (últimos 6 meses)
+        historical_data = []
+        for i in range(6):
+            month_start = (datetime.now() - timedelta(days=30*(i+1))).strftime("%Y-%m-%d")
+            month_end = (datetime.now() - timedelta(days=30*i)).strftime("%Y-%m-%d")
+            
+            invoices = self.search_read(
+                "account.move",
+                [
+                    ("move_type", "=", "out_invoice"),
+                    ("state", "=", "posted"),
+                    ("invoice_date", ">=", month_start),
+                    ("invoice_date", "<=", month_end),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["amount_total"],
+                limit=500
+            )
+            revenue = sum(i.get("amount_total", 0) for i in invoices)
+            
+            expenses = self.search_read(
+                "account.payment",
+                [
+                    ("payment_type", "=", "outbound"),
+                    ("state", "=", "posted"),
+                    ("date", ">=", month_start),
+                    ("date", "<=", month_end),
+                    ("company_id", "=", self.company_id),
+                ],
+                ["amount"],
+                limit=500
+            )
+            expenses_total = sum(e.get("amount", 0) for e in expenses)
+            
+            historical_data.append({
+                "revenue": revenue,
+                "expenses": expenses_total,
+            })
+        
+        # Calcular promedios y tendencias
+        avg_monthly_revenue = sum(d["revenue"] for d in historical_data) / len(historical_data) if historical_data else 0
+        avg_monthly_expenses = sum(d["expenses"] for d in historical_data) / len(historical_data) if historical_data else 0
+        
+        # Calcular crecimiento promedio
+        if len(historical_data) >= 2:
+            recent_avg = sum(d["revenue"] for d in historical_data[:3]) / 3
+            older_avg = sum(d["revenue"] for d in historical_data[3:]) / 3
+            growth_rate = ((recent_avg - older_avg) / older_avg * 100) if older_avg > 0 else 0
+        else:
+            growth_rate = 0
+        
+        # Escenarios anuales
+        months_remaining = 12 - datetime.now().month
+        
+        # Escenario Optimista: crecimiento del 10%
+        optimistic_revenue = avg_monthly_revenue * months_remaining * 1.10
+        optimistic_expenses = avg_monthly_expenses * months_remaining * 1.05
+        optimistic_net = optimistic_revenue - optimistic_expenses
+        
+        # Escenario Realista: sin crecimiento
+        realistic_revenue = avg_monthly_revenue * months_remaining
+        realistic_expenses = avg_monthly_expenses * months_remaining
+        realistic_net = realistic_revenue - realistic_expenses
+        
+        # Escenario Pesimista: decrecimiento del 10%
+        pessimistic_revenue = avg_monthly_revenue * months_remaining * 0.90
+        pessimistic_expenses = avg_monthly_expenses * months_remaining * 1.10
+        pessimistic_net = pessimistic_revenue - pessimistic_expenses
+        
+        message = f"""
+*🔮 Proyección Anual {datetime.now().year}*
+_Meses restantes: {months_remaining}_
+
+*Promedio Histórico (últimos 6 meses):*
+• Ingresos mensuales: {self.format_currency(avg_monthly_revenue)}
+• Gastos mensuales: {self.format_currency(avg_monthly_expenses)}
+• Tasa de crecimiento: {growth_rate:+.1f}%
+
+*Escenarios para el resto del año:*
+
+*🟢 Optimista (crecimiento 10%):*
+• Ingresos: {self.format_currency(optimistic_revenue)}
+• Gastos: {self.format_currency(optimistic_expenses)}
+• Neto: {self.format_currency(optimistic_net)}
+
+*🟡 Realista (sin cambios):*
+• Ingresos: {self.format_currency(realistic_revenue)}
+• Gastos: {self.format_currency(realistic_expenses)}
+• Neto: {self.format_currency(realistic_net)}
+
+*🔴 Pesimista (decrecimiento 10%):*
+• Ingresos: {self.format_currency(pessimistic_revenue)}
+• Gastos: {self.format_currency(pessimistic_expenses)}
+• Neto: {self.format_currency(pessimistic_net)}
+        """.strip()
+        
+        # Recomendaciones según escenario pesimista
+        if pessimistic_net < 0:
+            message += f"\n\n⚠️ *En escenario pesimista habría pérdidas*"
+            priority = Priority.HIGH
+        else:
+            priority = Priority.MEDIUM
+        
+        await self.notify(
+            title="🔮 Proyección Anual",
+            message=message,
+            priority=priority,
+        )
+        
+        return TaskResult(
+            task_name="annual_forecast",
+            agent_name=self.name,
+            started_at=started_at,
+            completed_at=datetime.now(),
+            success=True,
+            data={
+                "avg_monthly_revenue": avg_monthly_revenue,
+                "avg_monthly_expenses": avg_monthly_expenses,
+                "growth_rate": growth_rate,
+                "scenarios": {
+                    "optimistic": {"revenue": optimistic_revenue, "expenses": optimistic_expenses, "net": optimistic_net},
+                    "realistic": {"revenue": realistic_revenue, "expenses": realistic_expenses, "net": realistic_net},
+                    "pessimistic": {"revenue": pessimistic_revenue, "expenses": pessimistic_expenses, "net": pessimistic_net},
+                }
+            }
+        )
+    
+    async def generate_executive_report(self) -> TaskResult:
+        """Genera reporte ejecutivo mensual con KPIs y recomendaciones."""
+        started_at = datetime.now()
+        
+        self.logger.info("Generando reporte ejecutivo mensual...")
+        
+        # Consolidar información de todas las métricas
+        balances = self._get_cash_balance_by_currency()
+        cash_local = balances.get(self.default_currency, 0.0)
+        
+        daily_burn = self._calculate_daily_burn()
+        runway = cash_local / daily_burn if daily_burn > 0 else 999
+        
+        # Mes anterior completo
+        prev_month_start = (datetime.now().replace(day=1) - timedelta(days=1)).replace(day=1).strftime("%Y-%m-%d")
+        prev_month_end = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        prev_invoices = self.search_read(
+            "account.move",
+            [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("invoice_date", ">=", prev_month_start),
+                ("invoice_date", "<=", prev_month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount_total"],
+            limit=1000
+        )
+        prev_revenue = sum(i.get("amount_total", 0) for i in prev_invoices)
+        
+        # Mes actual
+        month_start = datetime.now().replace(day=1).strftime("%Y-%m-%d")
+        month_end = datetime.now().strftime("%Y-%m-%d")
+        
+        curr_invoices = self.search_read(
+            "account.move",
+            [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("invoice_date", ">=", month_start),
+                ("invoice_date", "<=", month_end),
+                ("company_id", "=", self.company_id),
+            ],
+            ["amount_total"],
+            limit=1000
+        )
+        curr_revenue = sum(i.get("amount_total", 0) for i in curr_invoices)
+        
+        # Crecimiento mensual
+        revenue_growth = ((curr_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else 0
+        
+        # KPIs consolidados
+        message = f"""
+*📊 Reporte Ejecutivo Mensual*
+_{datetime.now().strftime('%B %Y')}_
+
+*🎯 KPIs Principales:*
+
+*Liquidez:*
+• Saldo disponible: {self.format_currency(cash_local)}
+• Runway: {runway:.0f} días
+• Posición: {"🔴 Crítica" if runway <= self.critical_runway_days else "⚠️ Atención" if runway <= self.warning_runway_days else "✅ Saludable"}
+
+*Ingresos:*
+• Mes anterior: {self.format_currency(prev_revenue)}
+• Mes actual: {self.format_currency(curr_revenue)}
+• Crecimiento: {revenue_growth:+.1f}%
+
+*Presupuesto:*
+• Presupuesto mensual: {self.format_currency(self.monthly_budget)}
+• Cumplimiento: {(curr_revenue / self.monthly_budget * 100):.1f}%
+
+*Recomendaciones Estratégicas:*
+        """.strip()
+        
+        recommendations = []
+        
+        if runway <= self.warning_runway_days:
+            recommendations.append("🔴 Acelerar cobranza y/o buscar financiamiento")
+        
+        if revenue_growth < 0:
+            recommendations.append("⚠️ Revisar estrategia comercial - ingresos en descenso")
+        
+        if curr_revenue < self.monthly_budget * 0.8:
+            recommendations.append("⚠️ Acelerar ventas para alcanzar presupuesto")
+        
+        if not recommendations:
+            recommendations.append("✅ Situación financiera estable - mantener curso")
+        
+        for rec in recommendations:
+            message += f"\n{rec}"
+        
+        priority = Priority.CRITICAL if runway <= self.critical_runway_days else Priority.HIGH if runway <= self.warning_runway_days else Priority.MEDIUM
+        
+        await self.notify(
+            title="📊 Reporte Ejecutivo Mensual",
+            message=message,
+            priority=priority,
+        )
+        
+        return TaskResult(
+            task_name="monthly_executive_report",
+            agent_name=self.name,
+            started_at=started_at,
+            completed_at=datetime.now(),
+            success=True,
+            data={
+                "cash_balance": cash_local,
+                "runway_days": runway,
+                "prev_revenue": prev_revenue,
+                "curr_revenue": curr_revenue,
+                "revenue_growth": revenue_growth,
+                "budget_compliance": (curr_revenue / self.monthly_budget * 100) if self.monthly_budget > 0 else 0,
+            }
         )
 
 
