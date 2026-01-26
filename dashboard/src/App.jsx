@@ -70,7 +70,9 @@ function KPICard({ title, value, subtitle, icon: Icon, status, trend, onClick })
   return (
     <Component 
       onClick={onClick}
-      className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''} ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-all duration-200 text-left w-full' : ''}`}
+      type={onClick ? 'button' : undefined}
+      className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''} ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-all duration-200 text-left w-full border-0 outline-none focus:outline-none' : ''}`}
+      style={onClick ? { pointerEvents: 'auto' } : {}}
     >
       <div className="flex items-start justify-between">
         <div>
