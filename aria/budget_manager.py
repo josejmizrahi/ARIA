@@ -311,12 +311,21 @@ class BudgetManager:
             monthly_expenses.append(expenses_total)
             
             # Gastos por categoría
+            # Verificar si account.account tiene company_id antes de filtrar
+            from aria.agent_introspection import get_introspection
+            introspection = get_introspection(odoo_client)
+            account_model = introspection.get_model("account.account")
+            
+            # Construir dominio sin company_id si el campo no existe
+            domain = [
+                ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
+            ]
+            if account_model.field_exists("company_id"):
+                domain.append(("company_id", "=", self.company_id))
+            
             expense_accounts = odoo_client.search_read(
                 "account.account",
-                [
-                    ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
-                    ("company_id", "=", self.company_id),
-                ],
+                domain,
                 ["id", "name"],
                 limit=50
             )
@@ -325,15 +334,20 @@ class BudgetManager:
                 account_id = account["id"]
                 account_name = account.get("name", "Sin nombre")
                 
+                # Verificar si account.move.line tiene company_id antes de filtrar
+                move_line_model = introspection.get_model("account.move.line")
+                move_line_domain = [
+                    ("account_id", "=", account_id),
+                    ("parent_state", "=", "posted"),
+                    ("date", ">=", month_start),
+                    ("date", "<=", month_end),
+                ]
+                if move_line_model.field_exists("company_id"):
+                    move_line_domain.append(("company_id", "=", self.company_id))
+                
                 lines = odoo_client.search_read(
                     "account.move.line",
-                    [
-                        ("account_id", "=", account_id),
-                        ("parent_state", "=", "posted"),
-                        ("date", ">=", month_start),
-                        ("date", "<=", month_end),
-                        ("company_id", "=", self.company_id),
-                    ],
+                    move_line_domain,
                     ["balance"],
                     limit=1000
                 )

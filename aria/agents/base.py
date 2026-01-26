@@ -705,6 +705,32 @@ class BaseAgent(ABC):
                     self.logger.debug(f"Modelo {model} no existe en Odoo (confirmado por error). Retornando lista vacía.")
                     self._logged_missing_models.add(model)
                 return []
+            # Si el error es de campo inválido (como company_id), intentar sin ese campo
+            if "invalid field" in error_str and "company_id" in error_str:
+                # Extraer el campo problemático del dominio
+                if domain:
+                    # Filtrar dominio removiendo company_id
+                    filtered_domain = [
+                        item for item in domain 
+                        if not (isinstance(item, (list, tuple)) and len(item) >= 2 and item[0] == "company_id")
+                    ]
+                    if filtered_domain != domain:
+                        self.logger.debug(
+                            f"Campo company_id no existe en {model}. "
+                            f"Reintentando sin filtro de company_id."
+                        )
+                        try:
+                            return self.odoo.search_read(
+                                model,
+                                filtered_domain,
+                                fields=fields,
+                                offset=offset,
+                                limit=limit,
+                                order=order
+                            )
+                        except Exception:
+                            # Si aún falla, retornar vacío
+                            return []
             # Para otros errores, relanzar
             raise
     

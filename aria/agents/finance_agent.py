@@ -808,6 +808,7 @@ _¡Buen fin de semana!_
                 continue
             
             # Verificar que la cuenta sea asset_cash
+            # No usar company_id en account.account ya que puede no existir
             account = self.search_read(
                 "account.account",
                 [
