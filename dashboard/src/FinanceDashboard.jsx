@@ -14,6 +14,16 @@ import {
   Save,
   X
 } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { MetricCard } from "@/components/metric-card"
+import { SimpleBarChart } from "@/components/simple-bar-chart"
 
 const API_BASE = '/api'
 
@@ -32,132 +42,64 @@ function formatPercent(value) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
-// Metric Card Component
-function MetricCard({ title, value, subtitle, icon: Icon, trend, status }) {
-  const statusColors = {
-    ok: 'border-emerald-500/30 bg-emerald-500/10',
-    warning: 'border-amber-500/30 bg-amber-500/10',
-    critical: 'border-red-500/30 bg-red-500/10',
-  }
-  
-  return (
-    <div className={`glass rounded-xl p-6 border ${statusColors[status] || 'border-surface-800'}`}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <p className="text-surface-400 text-sm font-medium mb-1">{title}</p>
-          <p className="text-2xl font-bold font-mono">{value}</p>
-          {subtitle && (
-            <p className="text-surface-500 text-sm mt-1">{subtitle}</p>
-          )}
-        </div>
-        {Icon && (
-          <div className={`p-3 rounded-lg ${statusColors[status] || 'bg-aria-500/20'}`}>
-            <Icon className={`w-5 h-5 ${status === 'ok' ? 'text-emerald-400' : status === 'warning' ? 'text-amber-400' : status === 'critical' ? 'text-red-400' : 'text-aria-400'}`} />
-          </div>
-        )}
-      </div>
-      {trend !== undefined && (
-        <div className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {trend >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-          <span>{formatPercent(trend)}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Simple Bar Chart Component
-function SimpleBarChart({ data, title }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="glass rounded-xl p-8 text-center">
-        <p className="text-surface-500">No hay datos disponibles</p>
-      </div>
-    )
-  }
-  
-  const maxValue = Math.max(...data.map(d => d.value))
-  
-  return (
-    <div className="glass rounded-xl p-6">
-      <h3 className="text-lg font-semibold mb-4">{title}</h3>
-      <div className="space-y-3">
-        {data.map((item, i) => (
-          <div key={i}>
-            <div className="flex justify-between mb-1">
-              <span className="text-sm text-surface-400 truncate">{item.label}</span>
-              <span className="text-sm font-mono">{formatCurrency(item.value)}</span>
-            </div>
-            <div className="h-2 bg-surface-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-aria-500 to-aria-600 rounded-full transition-all"
-                style={{ width: `${(item.value / maxValue) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// Budget Comparison Component
 function BudgetComparison({ data }) {
   if (!data) return null
   
   const { actual_revenue, expected_revenue, revenue_variance_pct, actual_expenses, expected_expenses, expense_variance_pct } = data
   
   return (
-    <div className="glass rounded-xl p-6">
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Target className="w-5 h-5 text-aria-500" />
-        Comparativo vs Presupuesto
-      </h3>
-      
-      <div className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Target className="w-5 h-5" />
+          Comparativo vs Presupuesto
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         <div>
           <div className="flex justify-between mb-2">
-            <span className="text-sm text-surface-400">Ingresos</span>
-            <span className={`text-sm font-semibold ${revenue_variance_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <span className="text-sm text-muted-foreground">Ingresos</span>
+            <Badge variant={revenue_variance_pct >= 0 ? 'default' : 'destructive'}>
               {formatPercent(revenue_variance_pct)}
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <p className="text-surface-500">Real</p>
-              <p className="font-mono">{formatCurrency(actual_revenue)}</p>
+              <p className="text-muted-foreground">Real</p>
+              <p className="font-mono font-semibold">{formatCurrency(actual_revenue)}</p>
             </div>
             <div>
-              <p className="text-surface-500">Esperado</p>
-              <p className="font-mono">{formatCurrency(expected_revenue)}</p>
+              <p className="text-muted-foreground">Esperado</p>
+              <p className="font-mono font-semibold">{formatCurrency(expected_revenue)}</p>
             </div>
           </div>
         </div>
         
+        <Separator />
+        
         <div>
           <div className="flex justify-between mb-2">
-            <span className="text-sm text-surface-400">Gastos</span>
-            <span className={`text-sm font-semibold ${expense_variance_pct <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <span className="text-sm text-muted-foreground">Gastos</span>
+            <Badge variant={expense_variance_pct <= 0 ? 'default' : 'destructive'}>
               {formatPercent(expense_variance_pct)}
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <p className="text-surface-500">Real</p>
-              <p className="font-mono">{formatCurrency(actual_expenses)}</p>
+              <p className="text-muted-foreground">Real</p>
+              <p className="font-mono font-semibold">{formatCurrency(actual_expenses)}</p>
             </div>
             <div>
-              <p className="text-surface-500">Esperado</p>
-              <p className="font-mono">{formatCurrency(expected_expenses)}</p>
+              <p className="text-muted-foreground">Esperado</p>
+              <p className="font-mono font-semibold">{formatCurrency(expected_expenses)}</p>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
-// Budget Configuration Component
 function BudgetConfig({ budgets, onSave, onCancel }) {
   const [monthlyRevenue, setMonthlyRevenue] = useState(budgets?.monthly_revenue || 0)
   const [monthlyExpenses, setMonthlyExpenses] = useState(budgets?.monthly_expenses || 0)
@@ -195,114 +137,106 @@ function BudgetConfig({ budgets, onSave, onCancel }) {
   }
   
   return (
-    <div className="glass rounded-xl p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Settings className="w-5 h-5 text-aria-500" />
-          Configurar Presupuestos
-        </h3>
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Guardando...' : 'Guardar'}
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <X className="w-4 h-4" />
-            Cancelar
-          </button>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Configurar Presupuestos
+          </CardTitle>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? 'Guardando...' : 'Guardar'}
+            </Button>
+            <Button variant="outline" onClick={onCancel}>
+              <X className="w-4 h-4 mr-2" />
+              Cancelar
+            </Button>
+          </div>
         </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-surface-400 mb-2">
-            Presupuesto Mensual de Ingresos
-          </label>
-          <input
-            type="number"
-            value={monthlyRevenue}
-            onChange={(e) => setMonthlyRevenue(parseFloat(e.target.value) || 0)}
-            className="w-full px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
-            placeholder="0"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-surface-400 mb-2">
-            Presupuesto Mensual de Gastos
-          </label>
-          <input
-            type="number"
-            value={monthlyExpenses}
-            onChange={(e) => setMonthlyExpenses(parseFloat(e.target.value) || 0)}
-            className="w-full px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
-            placeholder="0"
-          />
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-surface-400 mb-2">
-          Presupuestos por Categoría
-        </label>
-        
-        <div className="space-y-2 mb-4">
-          {Object.entries(categories).map(([name, amount]) => (
-            <div key={name} className="flex items-center gap-2 p-2 bg-surface-900 rounded-lg">
-              <span className="flex-1 font-medium">{name}</span>
-              <span className="font-mono">{formatCurrency(amount)}</span>
-              <button
-                onClick={() => handleRemoveCategory(name)}
-                className="p-1 text-red-400 hover:text-red-300"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Presupuesto Mensual de Ingresos</Label>
+            <Input
+              type="number"
+              value={monthlyRevenue}
+              onChange={(e) => setMonthlyRevenue(parseFloat(e.target.value) || 0)}
+              placeholder="0"
+              className="font-mono"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Presupuesto Mensual de Gastos</Label>
+            <Input
+              type="number"
+              value={monthlyExpenses}
+              onChange={(e) => setMonthlyExpenses(parseFloat(e.target.value) || 0)}
+              placeholder="0"
+              className="font-mono"
+            />
+          </div>
         </div>
         
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newCategory.name}
-            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-            placeholder="Nombre de categoría"
-            className="flex-1 px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg"
-          />
-          <input
-            type="number"
-            value={newCategory.amount}
-            onChange={(e) => setNewCategory({ ...newCategory, amount: e.target.value })}
-            placeholder="Monto"
-            className="w-32 px-4 py-2 bg-surface-900 border border-surface-800 rounded-lg font-mono"
-          />
-          <button
-            onClick={handleAddCategory}
-            className="px-4 py-2 bg-aria-600 hover:bg-aria-700 rounded-lg transition-colors"
-          >
-            Agregar
-          </button>
+        <div className="space-y-2">
+          <Label>Presupuestos por Categoría</Label>
+          
+          <div className="space-y-2 mb-4">
+            {Object.entries(categories).map(([name, amount]) => (
+              <Card key={name}>
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 font-medium">{name}</span>
+                    <span className="font-mono">{formatCurrency(amount)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveCategory(name)}
+                    >
+                      <X className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              value={newCategory.name}
+              onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+              placeholder="Nombre de categoría"
+              className="flex-1"
+            />
+            <Input
+              type="number"
+              value={newCategory.amount}
+              onChange={(e) => setNewCategory({ ...newCategory, amount: e.target.value })}
+              placeholder="Monto"
+              className="w-32 font-mono"
+            />
+            <Button onClick={handleAddCategory}>
+              Agregar
+            </Button>
+          </div>
         </div>
-      </div>
-      
-      {budgets?.source && (
-        <div className="pt-4 border-t border-surface-800">
-          <p className="text-sm text-surface-500">
-            Fuente actual: <span className="font-medium capitalize">{budgets.source}</span>
-            {budgets.source === 'odoo' && budgets.name && (
-              <span className="ml-2">({budgets.name})</span>
-            )}
-          </p>
-        </div>
-      )}
-    </div>
+        
+        {budgets?.source && (
+          <div className="pt-4 border-t">
+            <p className="text-sm text-muted-foreground">
+              Fuente actual: <span className="font-medium capitalize">{budgets.source}</span>
+              {budgets.source === 'odoo' && budgets.name && (
+                <span className="ml-2">({budgets.name})</span>
+              )}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -317,17 +251,15 @@ export default function FinanceDashboard() {
   const [companies, setCompanies] = useState([])
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('overview')
   const [showBudgetConfig, setShowBudgetConfig] = useState(false)
   
   useEffect(() => {
     fetchFinanceData()
-    const interval = setInterval(fetchFinanceData, 60000) // Refresh every minute
+    const interval = setInterval(fetchFinanceData, 60000)
     return () => clearInterval(interval)
   }, [selectedCompany])
   
   useEffect(() => {
-    // Cargar lista de compañías
     fetch(`${API_BASE}/companies`)
       .then(res => res.json())
       .then(data => {
@@ -404,7 +336,6 @@ export default function FinanceDashboard() {
         const result = await response.json()
         setBudgets(result.budgets)
         setShowBudgetConfig(false)
-        // Recargar datos
         fetchFinanceData()
       } else {
         alert('Error guardando presupuestos')
@@ -418,21 +349,17 @@ export default function FinanceDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <Wallet className="w-12 h-12 text-aria-500 mx-auto animate-pulse" />
-          <p className="mt-4 text-surface-400">Cargando métricas financieras...</p>
-        </div>
+        <Card className="w-96">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <Wallet className="w-12 h-12 text-primary mx-auto animate-pulse" />
+              <p className="mt-4 text-muted-foreground">Cargando métricas financieras...</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
-  
-  const tabs = [
-    { id: 'overview', label: 'Resumen', icon: BarChart3 },
-    { id: 'ratios', label: 'Ratios', icon: Calculator },
-    { id: 'budget', label: 'Presupuesto', icon: Target },
-    { id: 'profitability', label: 'Rentabilidad', icon: TrendingUp },
-    { id: 'forecast', label: 'Proyecciones', icon: PieChart },
-  ]
   
   return (
     <div className="space-y-6">
@@ -440,32 +367,30 @@ export default function FinanceDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Wallet className="w-6 h-6 text-aria-500" />
+            <Wallet className="w-6 h-6" />
             Planeación Financiera
           </h1>
-          <p className="text-surface-500 text-sm mt-1">Análisis financiero profesional y métricas avanzadas</p>
+          <p className="text-muted-foreground text-sm mt-1">Análisis financiero profesional y métricas avanzadas</p>
         </div>
         <div className="flex items-center gap-3">
           {companies.length > 1 && (
-            <select
-              value={selectedCompany || ''}
-              onChange={(e) => setSelectedCompany(parseInt(e.target.value))}
-              className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg text-sm"
-            >
-              {companies.map(comp => (
-                <option key={comp.id} value={comp.id}>
-                  {comp.name} ({comp.currency})
-                </option>
-              ))}
-            </select>
+            <Select value={selectedCompany?.toString()} onValueChange={(v) => setSelectedCompany(parseInt(v))}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Seleccionar empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map(comp => (
+                  <SelectItem key={comp.id} value={comp.id.toString()}>
+                    {comp.name} ({comp.currency})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
-          <button
-            onClick={() => setShowBudgetConfig(!showBudgetConfig)}
-            className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
+          <Button variant="outline" onClick={() => setShowBudgetConfig(!showBudgetConfig)}>
+            <Settings className="w-4 h-4 mr-2" />
             {showBudgetConfig ? 'Ocultar Configuración' : 'Configurar Presupuestos'}
-          </button>
+          </Button>
         </div>
       </div>
       
@@ -479,226 +404,243 @@ export default function FinanceDashboard() {
       )}
       
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-surface-800">
-        {tabs.map(tab => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 flex items-center gap-2 border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'border-aria-500 text-aria-400'
-                  : 'border-transparent text-surface-500 hover:text-surface-300'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-      
-      {/* Overview Tab */}
-      {activeTab === 'overview' && summary && (
-        <div className="space-y-6">
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Resumen
+          </TabsTrigger>
+          <TabsTrigger value="ratios">
+            <Calculator className="w-4 h-4 mr-2" />
+            Ratios
+          </TabsTrigger>
+          <TabsTrigger value="budget">
+            <Target className="w-4 h-4 mr-2" />
+            Presupuesto
+          </TabsTrigger>
+          <TabsTrigger value="profitability">
+            <TrendingUp className="w-4 h-4 mr-2" />
+            Rentabilidad
+          </TabsTrigger>
+          <TabsTrigger value="forecast">
+            <PieChart className="w-4 h-4 mr-2" />
+            Proyecciones
+          </TabsTrigger>
+        </TabsList>
+        
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
           {/* Saldos por Divisa */}
-          {summary.cash_by_currency && Object.keys(summary.cash_by_currency).length > 0 && (
-            <div className="glass rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-aria-500" />
-                Saldos por Divisa
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(summary.cash_by_currency).map(([currency, balance]) => (
-                  <div key={currency} className="p-4 bg-surface-900 rounded-lg">
-                    <p className="text-sm text-surface-400 mb-1">{currency}</p>
-                    <p className="text-2xl font-bold font-mono">{formatCurrency(balance)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {summary?.cash_by_currency && Object.keys(summary.cash_by_currency).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  Saldos por Divisa
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.entries(summary.cash_by_currency).map(([currency, balance]) => (
+                    <Card key={currency}>
+                      <CardContent className="pt-4">
+                        <p className="text-sm text-muted-foreground mb-1">{currency}</p>
+                        <p className="text-2xl font-bold font-mono">{formatCurrency(balance)}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
           
           {/* Saldos por Cuenta Bancaria */}
-          {bankAccounts && bankAccounts.accounts_by_currency && (
-            <div className="glass rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-aria-500" />
-                Saldos por Cuenta Bancaria
-              </h3>
-              {Object.entries(bankAccounts.accounts_by_currency).map(([currency, accounts]) => (
-                <div key={currency} className="mb-6">
-                  <h4 className="text-sm font-medium text-surface-400 mb-3">{currency}</h4>
-                  <div className="space-y-2">
-                    {accounts.map((acc, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-surface-900 rounded-lg">
-                        <span className="font-medium">{acc.name}</span>
-                        <span className="font-mono">{formatCurrency(acc.balance)}</span>
-                      </div>
-                    ))}
+          {bankAccounts?.accounts_by_currency && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-5 h-5" />
+                  Saldos por Cuenta Bancaria
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {Object.entries(bankAccounts.accounts_by_currency).map(([currency, accounts]) => (
+                  <div key={currency} className="mb-6">
+                    <h4 className="text-sm font-medium text-muted-foreground mb-3">{currency}</h4>
+                    <div className="space-y-2">
+                      {accounts.map((acc, idx) => (
+                        <Card key={idx}>
+                          <CardContent className="pt-4">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{acc.name}</span>
+                              <span className="font-mono">{formatCurrency(acc.balance)}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
               title="Saldo Disponible"
-              value={formatCurrency(summary.cash_balance)}
-              subtitle={`Runway: ${Math.round(summary.runway_days || 0)} días`}
+              value={formatCurrency(summary?.cash_balance)}
+              subtitle={`Runway: ${Math.round(summary?.runway_days || 0)} días`}
               icon={Wallet}
-              status={summary.status}
+              status={summary?.status}
             />
             <MetricCard
               title="Ingresos del Mes"
-              value={formatCurrency(summary.monthly_revenue)}
-              subtitle={`Presupuesto: ${summary.budget_compliance?.toFixed(1) || 0}%`}
+              value={formatCurrency(summary?.monthly_revenue)}
+              subtitle={`Presupuesto: ${summary?.budget_compliance?.toFixed(1) || 0}%`}
               icon={DollarSign}
-              status={summary.budget_compliance >= 80 ? 'ok' : 'warning'}
+              status={summary?.budget_compliance >= 80 ? 'ok' : 'warning'}
             />
             <MetricCard
               title="Pagos Próximos (7d)"
-              value={formatCurrency(summary.upcoming_payments_7d)}
-              subtitle={`Cobranza esperada: ${formatCurrency(summary.expected_collections_7d)}`}
+              value={formatCurrency(summary?.upcoming_payments_7d)}
+              subtitle={`Cobranza esperada: ${formatCurrency(summary?.expected_collections_7d)}`}
               icon={AlertTriangle}
-              status={summary.net_position_7d >= 0 ? 'ok' : 'warning'}
+              status={summary?.net_position_7d >= 0 ? 'ok' : 'warning'}
             />
             <MetricCard
               title="Posición Neta (7d)"
-              value={formatCurrency(summary.net_position_7d)}
-              subtitle={summary.net_position_7d >= 0 ? 'Fondos suficientes' : 'Faltante de fondos'}
+              value={formatCurrency(summary?.net_position_7d)}
+              subtitle={summary?.net_position_7d >= 0 ? 'Fondos suficientes' : 'Faltante de fondos'}
               icon={CheckCircle2}
-              status={summary.net_position_7d >= 0 ? 'ok' : 'critical'}
+              status={summary?.net_position_7d >= 0 ? 'ok' : 'critical'}
             />
           </div>
           
           {budget && <BudgetComparison data={budget} />}
-        </div>
-      )}
-      
-      {/* Ratios Tab */}
-      {activeTab === 'ratios' && ratios && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <MetricCard
-              title="Margen Neto"
-              value={formatPercent(ratios.net_margin)}
-              subtitle="Porcentaje de ganancia neta"
-              icon={TrendingUp}
-              status={ratios.net_margin >= 10 ? 'ok' : ratios.net_margin >= 5 ? 'warning' : 'critical'}
-            />
-            <MetricCard
-              title="Ratio Gastos/Ingresos"
-              value={formatPercent(ratios.expense_ratio)}
-              subtitle="Porcentaje de gastos sobre ingresos"
-              icon={Calculator}
-              status={ratios.expense_ratio <= 70 ? 'ok' : ratios.expense_ratio <= 90 ? 'warning' : 'critical'}
-            />
-            <MetricCard
-              title="Liquidez Corriente"
-              value={ratios.current_ratio?.toFixed(2) || '-'}
-              subtitle="Ratio de liquidez"
-              icon={Wallet}
-              status={ratios.current_ratio >= 1.0 ? 'ok' : 'critical'}
-            />
-            <MetricCard
-              title="Crecimiento Ingresos"
-              value={formatPercent(ratios.revenue_growth)}
-              subtitle="Crecimiento mensual"
-              icon={ratios.revenue_growth >= 0 ? TrendingUp : TrendingDown}
-              trend={ratios.revenue_growth}
-              status={ratios.revenue_growth >= 0 ? 'ok' : 'warning'}
-            />
+        </TabsContent>
+        
+        {/* Ratios Tab */}
+        <TabsContent value="ratios" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <MetricCard
+                title="Margen Neto"
+                value={formatPercent(ratios?.net_margin)}
+                subtitle="Porcentaje de ganancia neta"
+                icon={TrendingUp}
+                status={ratios?.net_margin >= 10 ? 'ok' : ratios?.net_margin >= 5 ? 'warning' : 'critical'}
+              />
+              <MetricCard
+                title="Ratio Gastos/Ingresos"
+                value={formatPercent(ratios?.expense_ratio)}
+                subtitle="Porcentaje de gastos sobre ingresos"
+                icon={Calculator}
+                status={ratios?.expense_ratio <= 70 ? 'ok' : ratios?.expense_ratio <= 90 ? 'warning' : 'critical'}
+              />
+              <MetricCard
+                title="Liquidez Corriente"
+                value={ratios?.current_ratio?.toFixed(2) || '-'}
+                subtitle="Ratio de liquidez"
+                icon={Wallet}
+                status={ratios?.current_ratio >= 1.0 ? 'ok' : 'critical'}
+              />
+              <MetricCard
+                title="Crecimiento Ingresos"
+                value={formatPercent(ratios?.revenue_growth)}
+                subtitle="Crecimiento mensual"
+                icon={ratios?.revenue_growth >= 0 ? TrendingUp : TrendingDown}
+                trend={ratios?.revenue_growth}
+                status={ratios?.revenue_growth >= 0 ? 'ok' : 'warning'}
+              />
+            </div>
+            
+            {ratios?.months_data && (
+              <SimpleBarChart
+                title="Tendencias (últimos 3 meses)"
+                data={ratios.months_data.map(m => ({
+                  label: m.month,
+                  value: m.net,
+                }))}
+              />
+            )}
           </div>
-          
-          {ratios.months_data && (
-            <SimpleBarChart
-              title="Tendencias (últimos 3 meses)"
-              data={ratios.months_data.map(m => ({
-                label: m.month,
-                value: m.net,
-              }))}
-            />
-          )}
-        </div>
-      )}
-      
-      {/* Budget Tab */}
-      {activeTab === 'budget' && budget && (
-        <div className="space-y-6">
+        </TabsContent>
+        
+        {/* Budget Tab */}
+        <TabsContent value="budget" className="space-y-6">
           {budgets && (
-            <div className="glass rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Presupuestos Configurados</h3>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  budgets.source === 'odoo' ? 'bg-blue-500/20 text-blue-400' :
-                  budgets.source === 'manual' ? 'bg-emerald-500/20 text-emerald-400' :
-                  'bg-amber-500/20 text-amber-400'
-                }`}>
-                  Fuente: {budgets.source === 'odoo' ? 'Odoo' : budgets.source === 'manual' ? 'Manual' : 'Calculado'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-surface-400 mb-1">Ingresos Mensuales</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_revenue)}</p>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Presupuestos Configurados</CardTitle>
+                  <Badge variant={budgets.source === 'odoo' ? 'default' : budgets.source === 'manual' ? 'secondary' : 'outline'}>
+                    Fuente: {budgets.source === 'odoo' ? 'Odoo' : budgets.source === 'manual' ? 'Manual' : 'Calculado'}
+                  </Badge>
                 </div>
-                <div>
-                  <p className="text-sm text-surface-400 mb-1">Gastos Mensuales</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_expenses)}</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Ingresos Mensuales</p>
+                    <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_revenue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Gastos Mensuales</p>
+                    <p className="text-xl font-bold font-mono">{formatCurrency(budgets.monthly_expenses)}</p>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
           
-          <BudgetComparison data={budget} />
+          {budget && <BudgetComparison data={budget} />}
           
-          {budget.projected_revenue && (
-            <div className="glass rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Proyección al Final del Mes</h3>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-surface-400 mb-1">Ingresos Proyectados</p>
-                  <p className="text-2xl font-bold font-mono">{formatCurrency(budget.projected_revenue)}</p>
+          {budget?.projected_revenue && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Proyección al Final del Mes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Ingresos Proyectados</p>
+                    <p className="text-2xl font-bold font-mono">{formatCurrency(budget.projected_revenue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Gastos Proyectados</p>
+                    <p className="text-2xl font-bold font-mono">{formatCurrency(budget.projected_expenses)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-surface-400 mb-1">Gastos Proyectados</p>
-                  <p className="text-2xl font-bold font-mono">{formatCurrency(budget.projected_expenses)}</p>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      )}
-      
-      {/* Profitability Tab */}
-      {activeTab === 'profitability' && profitability && (
-        <div className="space-y-6">
+        </TabsContent>
+        
+        {/* Profitability Tab */}
+        <TabsContent value="profitability" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <MetricCard
               title="Margen de Contribución"
-              value={formatPercent(profitability.margin_pct)}
-              subtitle={formatCurrency(profitability.contribution_margin)}
+              value={formatPercent(profitability?.margin_pct)}
+              subtitle={formatCurrency(profitability?.contribution_margin)}
               icon={TrendingUp}
-              status={profitability.margin_pct >= 20 ? 'ok' : 'warning'}
+              status={profitability?.margin_pct >= 20 ? 'ok' : 'warning'}
             />
             <MetricCard
               title="Punto de Equilibrio"
-              value={formatCurrency(profitability.break_even)}
+              value={formatCurrency(profitability?.break_even)}
               subtitle="Ingresos necesarios para cubrir costos"
               icon={Target}
             />
             <MetricCard
               title="Gastos Totales"
-              value={formatCurrency(profitability.total_expenses)}
-              subtitle={`Ingresos: ${formatCurrency(profitability.total_revenue)}`}
+              value={formatCurrency(profitability?.total_expenses)}
+              subtitle={`Ingresos: ${formatCurrency(profitability?.total_revenue)}`}
               icon={Calculator}
             />
           </div>
           
-          {profitability.expenses_by_category && (
+          {profitability?.expenses_by_category && (
             <SimpleBarChart
               title="Gastos por Categoría (Top 10)"
               data={Object.entries(profitability.expenses_by_category)
@@ -708,7 +650,7 @@ export default function FinanceDashboard() {
             />
           )}
           
-          {profitability.revenue_by_product && Object.keys(profitability.revenue_by_product).length > 0 && (
+          {profitability?.revenue_by_product && Object.keys(profitability.revenue_by_product).length > 0 && (
             <SimpleBarChart
               title="Ingresos por Producto/Servicio (Top 5)"
               data={Object.entries(profitability.revenue_by_product)
@@ -717,96 +659,107 @@ export default function FinanceDashboard() {
                 .map(([label, value]) => ({ label, value }))}
             />
           )}
-        </div>
-      )}
-      
-      {/* Forecast Tab */}
-      {activeTab === 'forecast' && forecast && (
-        <div className="space-y-6">
+        </TabsContent>
+        
+        {/* Forecast Tab */}
+        <TabsContent value="forecast" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass rounded-xl p-6 border border-emerald-500/30 bg-emerald-500/10">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                Escenario Optimista
-              </h3>
-              <div className="space-y-2">
+            <Card className="border-green-500/50 bg-green-500/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  Escenario Optimista
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 <div>
-                  <p className="text-sm text-surface-400">Ingresos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.optimistic?.revenue)}</p>
+                  <p className="text-sm text-muted-foreground">Ingresos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.optimistic?.revenue)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-surface-400">Gastos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.optimistic?.expenses)}</p>
+                  <p className="text-sm text-muted-foreground">Gastos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.optimistic?.expenses)}</p>
                 </div>
-                <div className="pt-2 border-t border-surface-800">
-                  <p className="text-sm text-surface-400">Neto</p>
-                  <p className="text-2xl font-bold font-mono text-emerald-400">{formatCurrency(forecast.scenarios?.optimistic?.net)}</p>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Neto</p>
+                  <p className="text-2xl font-bold font-mono text-green-500">{formatCurrency(forecast?.scenarios?.optimistic?.net)}</p>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
             
-            <div className="glass rounded-xl p-6 border border-amber-500/30 bg-amber-500/10">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Target className="w-5 h-5 text-amber-400" />
-                Escenario Realista
-              </h3>
-              <div className="space-y-2">
+            <Card className="border-yellow-500/50 bg-yellow-500/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-yellow-500" />
+                  Escenario Realista
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 <div>
-                  <p className="text-sm text-surface-400">Ingresos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.realistic?.revenue)}</p>
+                  <p className="text-sm text-muted-foreground">Ingresos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.realistic?.revenue)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-surface-400">Gastos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.realistic?.expenses)}</p>
+                  <p className="text-sm text-muted-foreground">Gastos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.realistic?.expenses)}</p>
                 </div>
-                <div className="pt-2 border-t border-surface-800">
-                  <p className="text-sm text-surface-400">Neto</p>
-                  <p className="text-2xl font-bold font-mono text-amber-400">{formatCurrency(forecast.scenarios?.realistic?.net)}</p>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Neto</p>
+                  <p className="text-2xl font-bold font-mono text-yellow-500">{formatCurrency(forecast?.scenarios?.realistic?.net)}</p>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
             
-            <div className="glass rounded-xl p-6 border border-red-500/30 bg-red-500/10">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
-                Escenario Pesimista
-              </h3>
-              <div className="space-y-2">
+            <Card className="border-red-500/50 bg-red-500/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  Escenario Pesimista
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 <div>
-                  <p className="text-sm text-surface-400">Ingresos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.pessimistic?.revenue)}</p>
+                  <p className="text-sm text-muted-foreground">Ingresos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.pessimistic?.revenue)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-surface-400">Gastos</p>
-                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast.scenarios?.pessimistic?.expenses)}</p>
+                  <p className="text-sm text-muted-foreground">Gastos</p>
+                  <p className="text-xl font-bold font-mono">{formatCurrency(forecast?.scenarios?.pessimistic?.expenses)}</p>
                 </div>
-                <div className="pt-2 border-t border-surface-800">
-                  <p className="text-sm text-surface-400">Neto</p>
-                  <p className="text-2xl font-bold font-mono text-red-400">{formatCurrency(forecast.scenarios?.pessimistic?.net)}</p>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Neto</p>
+                  <p className="text-2xl font-bold font-mono text-red-500">{formatCurrency(forecast?.scenarios?.pessimistic?.net)}</p>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
           
-          <div className="glass rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Promedio Histórico</h3>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-surface-400 mb-1">Ingresos Mensuales Promedio</p>
-                <p className="text-2xl font-bold font-mono">{formatCurrency(forecast.avg_monthly_revenue)}</p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Promedio Histórico</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Ingresos Mensuales Promedio</p>
+                  <p className="text-2xl font-bold font-mono">{formatCurrency(forecast?.avg_monthly_revenue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Gastos Mensuales Promedio</p>
+                  <p className="text-2xl font-bold font-mono">{formatCurrency(forecast?.avg_monthly_expenses)}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground mb-1">Tasa de Crecimiento</p>
+                  <p className="text-xl font-bold font-mono">{formatPercent(forecast?.growth_rate)}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-surface-400 mb-1">Gastos Mensuales Promedio</p>
-                <p className="text-2xl font-bold font-mono">{formatCurrency(forecast.avg_monthly_expenses)}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm text-surface-400 mb-1">Tasa de Crecimiento</p>
-                <p className="text-xl font-bold font-mono">{formatPercent(forecast.growth_rate)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

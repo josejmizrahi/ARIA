@@ -9,6 +9,12 @@ import {
   Search,
   RefreshCw
 } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 
 const API_BASE = '/api'
 
@@ -29,89 +35,98 @@ function formatDate(dateStr) {
 }
 
 function MessageBubble({ message, isFromCurrent }) {
-  const priorityColors = {
-    low: 'bg-surface-800',
-    medium: 'bg-blue-500/20 border-blue-500/30',
-    high: 'bg-amber-500/20 border-amber-500/30',
-    critical: 'bg-red-500/20 border-red-500/30',
+  const priorityVariants = {
+    low: 'default',
+    medium: 'secondary',
+    high: 'outline',
+    critical: 'destructive',
   }
   
   return (
     <div className={`flex ${isFromCurrent ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`max-w-2xl rounded-xl p-4 border ${priorityColors[message.priority] || 'bg-surface-800'}`}>
-        <div className="flex items-center gap-2 mb-2">
-          <Bot className="w-4 h-4" />
-          <span className="font-semibold text-sm">{message.from_agent}</span>
-          {message.to_agent && (
-            <>
-              <ArrowRight className="w-3 h-3 text-surface-500" />
-              <span className="text-sm text-surface-400">{message.to_agent}</span>
-            </>
+      <Card className={`max-w-2xl ${isFromCurrent ? 'bg-primary/10' : ''}`}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Bot className="w-4 h-4" />
+            <span className="font-semibold text-sm">{message.from_agent}</span>
+            {message.to_agent && (
+              <>
+                <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">{message.to_agent}</span>
+              </>
+            )}
+            <Badge variant={priorityVariants[message.priority] || 'default'} className="ml-auto text-xs">
+              {message.priority}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {formatDate(message.created_at)}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <CardTitle className="text-base mb-2">{message.subject}</CardTitle>
+          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          
+          {message.data && Object.keys(message.data).length > 0 && (
+            <div className="mt-3 pt-3 border-t">
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  Ver datos ({Object.keys(message.data).length} campos)
+                </summary>
+                <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
+                  {JSON.stringify(message.data, null, 2)}
+                </pre>
+              </details>
+            </div>
           )}
-          <span className="ml-auto text-xs text-surface-500">
-            {formatDate(message.created_at)}
-          </span>
-        </div>
-        
-        <h4 className="font-medium mb-2">{message.subject}</h4>
-        <p className="text-sm text-surface-300 whitespace-pre-wrap">{message.content}</p>
-        
-        {message.data && Object.keys(message.data).length > 0 && (
-          <div className="mt-3 pt-3 border-t border-surface-800">
-            <details className="text-xs">
-              <summary className="cursor-pointer text-surface-400 hover:text-surface-300">
-                Ver datos ({Object.keys(message.data).length} campos)
-              </summary>
-              <pre className="mt-2 p-2 bg-surface-950 rounded text-xs overflow-x-auto">
-                {JSON.stringify(message.data, null, 2)}
-              </pre>
-            </details>
-          </div>
-        )}
-        
-        {message.requires_response && !message.responded_at && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-amber-400">
-            <Clock className="w-3 h-3" />
-            Esperando respuesta
-          </div>
-        )}
-        
-        {message.responded_at && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-emerald-400">
-            <CheckCircle2 className="w-3 h-3" />
-            Respondido {formatDate(message.responded_at)}
-          </div>
-        )}
-      </div>
+          
+          {message.requires_response && !message.responded_at && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-yellow-500">
+              <Clock className="w-3 h-3" />
+              Esperando respuesta
+            </div>
+          )}
+          
+          {message.responded_at && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-green-500">
+              <CheckCircle2 className="w-3 h-3" />
+              Respondido {formatDate(message.responded_at)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
 function ConversationThread({ conversation }) {
   return (
-    <div className="glass rounded-xl p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="font-semibold">{conversation.subject}</h3>
-          <p className="text-sm text-surface-400">
-            {conversation.from_agent} → {conversation.to_agent || 'Todos'}
-          </p>
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>{conversation.subject}</CardTitle>
+            <CardDescription>
+              {conversation.from_agent} → {conversation.to_agent || 'Todos'}
+            </CardDescription>
+          </div>
+          <Badge variant="outline">
+            {conversation.message_count} mensajes
+          </Badge>
         </div>
-        <span className="text-xs text-surface-500">
-          {conversation.message_count} mensajes
-        </span>
-      </div>
-      
-      <div className="space-y-2">
-        {conversation.messages.map((msg, idx) => (
-          <MessageBubble
-            key={idx}
-            message={msg}
-            isFromCurrent={idx % 2 === 0}
-          />
-        ))}
-      </div>
-    </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {conversation.messages.map((msg, idx) => (
+            <MessageBubble
+              key={idx}
+              message={msg}
+              isFromCurrent={idx % 2 === 0}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -119,7 +134,6 @@ export default function AgentConversations() {
   const [conversations, setConversations] = useState([])
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('conversations')
   const [filterAgent, setFilterAgent] = useState('')
   const [selectedConversation, setSelectedConversation] = useState(null)
   
@@ -148,17 +162,21 @@ export default function AgentConversations() {
   
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000) // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [])
   
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <MessageSquare className="w-12 h-12 text-aria-500 mx-auto animate-pulse" />
-          <p className="mt-4 text-surface-400">Cargando conversaciones...</p>
-        </div>
+        <Card className="w-96">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <MessageSquare className="w-12 h-12 text-primary mx-auto animate-pulse" />
+              <p className="mt-4 text-muted-foreground">Cargando conversaciones...</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -183,127 +201,122 @@ export default function AgentConversations() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <MessageSquare className="w-6 h-6 text-aria-500" />
+            <MessageSquare className="w-6 h-6" />
             Conversaciones entre Agentes
           </h1>
-          <p className="text-surface-500 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             Cómo los agentes se comunican y colaboran para resolver problemas
           </p>
         </div>
-        <button
-          onClick={fetchData}
-          className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
+        <Button variant="outline" onClick={fetchData}>
+          <RefreshCw className="w-4 h-4 mr-2" />
           Actualizar
-        </button>
+        </Button>
       </div>
       
       {/* Filter */}
       <div className="flex items-center gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-surface-500" />
-          <input
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
             type="text"
             value={filterAgent}
             onChange={(e) => setFilterAgent(e.target.value)}
             placeholder="Filtrar por agente..."
-            className="w-full pl-10 pr-4 py-2 bg-surface-900 border border-surface-800 rounded-lg"
+            className="pl-10"
           />
         </div>
       </div>
       
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-surface-800">
-        <button
-          onClick={() => setActiveTab('conversations')}
-          className={`px-4 py-2 border-b-2 transition-colors ${
-            activeTab === 'conversations'
-              ? 'border-aria-500 text-aria-400'
-              : 'border-transparent text-surface-500 hover:text-surface-300'
-          }`}
-        >
-          Conversaciones ({conversations.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('messages')}
-          className={`px-4 py-2 border-b-2 transition-colors ${
-            activeTab === 'messages'
-              ? 'border-aria-500 text-aria-400'
-              : 'border-transparent text-surface-500 hover:text-surface-300'
-          }`}
-        >
-          Todos los Mensajes ({messages.length})
-        </button>
-      </div>
-      
-      {/* Content */}
-      {activeTab === 'conversations' && (
-        <div>
+      <Tabs defaultValue="conversations" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="conversations">
+            Conversaciones ({conversations.length})
+          </TabsTrigger>
+          <TabsTrigger value="messages">
+            Todos los Mensajes ({messages.length})
+          </TabsTrigger>
+        </TabsList>
+        
+        {/* Conversations Tab */}
+        <TabsContent value="conversations">
           {selectedConversation ? (
             <div>
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setSelectedConversation(null)}
-                className="mb-4 text-sm text-surface-400 hover:text-surface-300"
+                className="mb-4"
               >
                 ← Volver a conversaciones
-              </button>
+              </Button>
               <ConversationThread conversation={selectedConversation} />
             </div>
           ) : (
             <div>
               {filteredConversations.length > 0 ? (
                 filteredConversations.map((conv) => (
-                  <div
+                  <Card
                     key={conv.id}
+                    className="mb-4 cursor-pointer hover:bg-accent transition-colors"
                     onClick={() => setSelectedConversation(conv)}
-                    className="glass rounded-xl p-4 mb-4 cursor-pointer hover:bg-surface-800/50 transition-colors"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">{conv.subject}</h3>
-                        <p className="text-sm text-surface-400">
-                          {conv.from_agent} → {conv.to_agent || 'Todos'} • {conv.message_count} mensajes
-                        </p>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">{conv.subject}</CardTitle>
+                          <CardDescription>
+                            {conv.from_agent} → {conv.to_agent || 'Todos'} • {conv.message_count} mensajes
+                          </CardDescription>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(conv.last_message)}
+                        </span>
                       </div>
-                      <span className="text-xs text-surface-500">
-                        {formatDate(conv.last_message)}
-                      </span>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))
               ) : (
-                <div className="glass rounded-xl p-8 text-center">
-                  <MessageSquare className="w-12 h-12 text-surface-600 mx-auto mb-3" />
-                  <p className="text-surface-400">No hay conversaciones aún</p>
-                  <p className="text-sm text-surface-500 mt-1">
-                    Los agentes comenzarán a comunicarse cuando detecten problemas
-                  </p>
-                </div>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground">No hay conversaciones aún</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Los agentes comenzarán a comunicarse cuando detecten problemas
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           )}
-        </div>
-      )}
-      
-      {activeTab === 'messages' && (
-        <div className="space-y-4">
-          {filteredMessages.length > 0 ? (
-            filteredMessages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isFromCurrent={false}
-              />
-            ))
-          ) : (
-            <div className="glass rounded-xl p-8 text-center">
-              <MessageSquare className="w-12 h-12 text-surface-600 mx-auto mb-3" />
-              <p className="text-surface-400">No hay mensajes</p>
-            </div>
-          )}
-        </div>
-      )}
+        </TabsContent>
+        
+        {/* Messages Tab */}
+        <TabsContent value="messages">
+          <div className="space-y-4">
+            {filteredMessages.length > 0 ? (
+              filteredMessages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isFromCurrent={false}
+                />
+              ))
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-8">
+                    <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">No hay mensajes</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
