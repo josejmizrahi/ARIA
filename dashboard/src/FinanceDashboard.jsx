@@ -265,7 +265,9 @@ export default function FinanceDashboard() {
       .then(data => {
         setCompanies(data.companies || [])
         if (data.companies && data.companies.length > 0 && !selectedCompany) {
-          setSelectedCompany(data.companies[0].id)
+          // Buscar company_id = 1 primero, si no existe usar la primera disponible
+          const companyId1 = data.companies.find(c => c.id === 1)
+          setSelectedCompany(companyId1 ? 1 : data.companies[0].id)
         }
       })
       .catch(err => console.error('Error cargando compañías:', err))
