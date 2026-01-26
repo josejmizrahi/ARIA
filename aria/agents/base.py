@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 import traceback
 from typing import Any, Optional
 
+from pydantic import BaseModel, Field
+
 from aria.config import settings
 from aria.models.proposal import Proposal, ProposalType, ProposalAction, Priority
 from aria.models.task import TaskDefinition, TaskResult
@@ -121,6 +123,137 @@ class BaseAgent(ABC):
             from aria.action_executor import action_executor
             self._executor = action_executor
         return self._executor
+    
+    @property
+    def messaging(self):
+        """Sistema de mensajería entre agentes (lazy loading)."""
+        from aria.agent_messaging import get_messaging
+        return get_messaging()
+    
+    @property
+    def introspection(self):
+        """Sistema de introspección (lazy loading)."""
+        from aria.agent_introspection import get_introspection
+        return get_introspection(self.odoo)
+    
+    @property
+    def learning(self):
+        """Sistema de aprendizaje (lazy loading)."""
+        from aria.agent_learning import get_learning
+        return get_learning()
+    
+    # ==================== Métodos de Comunicación ====================
+    
+    async def ask_agent(
+        self,
+        to_agent: str,
+        question: str,
+        data: Optional[dict] = None,
+        priority: str = "medium",
+    ) -> Optional[dict]:
+        """
+        Hace una pregunta a otro agente.
+        
+        Returns:
+            Respuesta del agente o None si no responde
+        """
+        from aria.agent_messaging import MessagePriority
+        
+        priority_map = {
+            "low": MessagePriority.LOW,
+            "medium": MessagePriority.MEDIUM,
+            "high": MessagePriority.HIGH,
+            "critical": MessagePriority.CRITICAL,
+        }
+        
+        message = self.messaging.query(
+            from_agent=self.name,
+            to_agent=to_agent,
+            question=question,
+            data=data or {},
+            priority=priority_map.get(priority, MessagePriority.MEDIUM),
+        )
+        
+        # Esperar respuesta (simplificado - en producción usaría async/await con timeout)
+        # Por ahora retornamos None y el otro agente debe responder manualmente
+        return None
+    
+    async def respond_to_agent(
+        self,
+        message_id: str,
+        response: str,
+        data: Optional[dict] = None,
+    ) -> None:
+        """Responde a un mensaje de otro agente."""
+        from uuid import UUID
+        
+        try:
+            msg_id = UUID(message_id)
+            self.messaging.respond(
+                from_agent=self.name,
+                to_message_id=msg_id,
+                response=response,
+                data=data or {},
+            )
+        except Exception as e:
+            self.logger.error(f"Error respondiendo a mensaje {message_id}: {e}")
+    
+    async def alert_agent(
+        self,
+        to_agent: str,
+        alert_subject: str,
+        alert_content: str,
+        data: Optional[dict] = None,
+        priority: str = "high",
+    ) -> None:
+        """Envía una alerta a otro agente."""
+        from aria.agent_messaging import MessagePriority
+        
+        priority_map = {
+            "low": MessagePriority.LOW,
+            "medium": MessagePriority.MEDIUM,
+            "high": MessagePriority.HIGH,
+            "critical": MessagePriority.CRITICAL,
+        }
+        
+        self.messaging.alert(
+            from_agent=self.name,
+            to_agent=to_agent,
+            alert_subject=alert_subject,
+            alert_content=alert_content,
+            data=data or {},
+            priority=priority_map.get(priority, MessagePriority.HIGH),
+        )
+    
+    async def request_data_from_agent(
+        self,
+        to_agent: str,
+        data_request: str,
+        fields: Optional[list[str]] = None,
+        filters: Optional[dict] = None,
+    ) -> Optional[dict]:
+        """Solicita datos específicos a otro agente."""
+        message = self.messaging.request_data(
+            from_agent=self.name,
+            to_agent=to_agent,
+            data_request=data_request,
+            fields=fields,
+            filters=filters,
+        )
+        
+        # El otro agente debe responder manualmente por ahora
+        return None
+    
+    def check_messages(self, unread_only: bool = True) -> list:
+        """Revisa mensajes recibidos."""
+        from aria.agent_messaging import MessageType
+        
+        messages = self.messaging.get_messages(
+            agent_name=self.name,
+            unread_only=unread_only,
+        )
+        
+        return [m.model_dump() for m in messages]
     
     # ==================== Métodos Abstractos ====================
     
@@ -428,8 +561,54 @@ class BaseAgent(ABC):
         limit: int = 100,
         offset: int = 0,
         order: Optional[str] = None,
+        validate: bool = True,  # Validar campos antes de consultar
     ) -> list[dict]:
-        """Wrapper conveniente para búsquedas en Odoo."""
+        """
+        Wrapper conveniente para búsquedas en Odoo con introspección automática.
+        
+        Args:
+            validate: Si True, valida campos antes de consultar (recomendado)
+        """
+        fields = fields or []
+        
+        # Introspección automática si está habilitada
+        if validate and fields:
+            from aria.agent_introspection import get_introspection
+            
+            try:
+                introspection = get_introspection(self.odoo)
+                validation = introspection.validate_query(model, fields, domain)
+                
+                if not validation["valid"]:
+                    # Usar solo campos válidos
+                    valid_fields = [
+                        field for field, valid in validation["fields_valid"].items()
+                        if valid
+                    ]
+                    
+                    if valid_fields:
+                        self.logger.warning(
+                            f"Campos inválidos en {model}: {validation['missing_fields']}. "
+                            f"Usando solo campos válidos: {valid_fields}"
+                        )
+                        fields = valid_fields
+                    else:
+                        self.logger.error(
+                            f"Modelo {model} no existe o ningún campo es válido. "
+                            f"Campos solicitados: {fields}"
+                        )
+                        return []
+                
+                # Si hay sugerencias, loguearlas
+                if validation.get("suggestions"):
+                    for missing, suggestion in validation["suggestions"].items():
+                        self.logger.info(
+                            f"Campo '{missing}' no existe en {model}. "
+                            f"Sugerencia: usar '{suggestion}'"
+                        )
+            except Exception as e:
+                self.logger.warning(f"Error en introspección de {model}: {e}. Continuando sin validación.")
+        
         return self.odoo.search_read(
             model,
             domain or [],

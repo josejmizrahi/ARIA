@@ -19,9 +19,11 @@ import {
   Bot,
   Settings,
   Target,
-  PiggyBank
+  PiggyBank,
+  MessageSquare
 } from 'lucide-react'
 import FinanceDashboard from './FinanceDashboard'
+import AgentConversations from './AgentConversations'
 
 const API_BASE = '/api'
 
@@ -211,6 +213,7 @@ export default function App() {
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
   const [showFinanceDashboard, setShowFinanceDashboard] = useState(false)
+  const [showConversations, setShowConversations] = useState(false)
   const [companies, setCompanies] = useState([])
   const [selectedCompany, setSelectedCompany] = useState(null)
   
@@ -317,6 +320,38 @@ export default function App() {
   const highCount = pendingByPriority.high || 0
   const totalPending = dashboard?.pending_proposals?.total || 0
   
+  // Si se muestra el dashboard de conversaciones, renderizarlo
+  if (showConversations) {
+    return (
+      <div className="min-h-screen">
+        <header className="sticky top-0 z-50 glass border-b border-surface-800/50">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-aria-500 to-aria-700 rounded-xl">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold tracking-tight">ARIA</h1>
+                  <p className="text-xs text-surface-500">Conversaciones entre Agentes</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowConversations(false)}
+                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors"
+              >
+                Volver al Dashboard
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          <AgentConversations />
+        </main>
+      </div>
+    )
+  }
+  
   // Si se muestra el dashboard financiero, renderizarlo
   if (showFinanceDashboard) {
     return (
@@ -379,6 +414,14 @@ export default function App() {
                   ))}
                 </select>
               )}
+              <button
+                onClick={() => setShowConversations(true)}
+                className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
+                title="Ver conversaciones entre agentes"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Conversaciones
+              </button>
               {lastUpdate && (
                 <span className="text-sm text-surface-500 flex items-center gap-2">
                   <Clock className="w-4 h-4" />

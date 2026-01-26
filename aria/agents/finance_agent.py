@@ -240,10 +240,38 @@ class FinanceAgent(BaseAgent):
     # ==================== Tareas ====================
     
     async def project_cash_flow(self) -> TaskResult:
-        """Proyecta flujo de caja a 4 semanas."""
+        """Proyecta flujo de caja a 4 semanas con colaboración de otros agentes."""
         started_at = datetime.now()
         
         self.logger.info("Proyectando flujo de caja...")
+        
+        # Introspección: Validar modelos antes de usar
+        self.logger.info("Validando modelos y campos antes de consultar...")
+        validation_account_move = self.introspection.validate_query(
+            "account.move",
+            ["amount_residual", "invoice_date_due", "move_type", "payment_state", "state"]
+        )
+        
+        if not validation_account_move["valid"]:
+            self.logger.warning(
+                f"Validación de account.move falló: {validation_account_move['missing_fields']}"
+            )
+            # Intentar con campos válidos solamente
+            if validation_account_move.get("suggestions"):
+                self.logger.info(f"Sugerencias: {validation_account_move['suggestions']}")
+        
+        # Colaboración: Consultar al agente de cobranza sobre proyección de cobranza
+        try:
+            await self.alert_agent(
+                to_agent="cobranza",
+                alert_subject="Consulta: Proyección de cobranza para flujo de caja",
+                alert_content=f"Necesito proyección de cobranza para las próximas {self.projection_weeks} semanas para calcular flujo de caja",
+                data={"weeks": self.projection_weeks, "company_id": self.company_id},
+                priority="medium",
+            )
+            self.logger.info("Consulta enviada al agente de cobranza")
+        except Exception as e:
+            self.logger.warning(f"No se pudo consultar al agente de cobranza: {e}")
         
         # Saldos por divisa
         balances_by_currency = self._get_cash_balance_by_currency()
@@ -258,14 +286,14 @@ class FinanceAgent(BaseAgent):
             days_start = (week - 1) * 7
             days_end = week * 7
             
-            # Cobranza esperada
+            # Cobranza esperada (con validación)
             collections = self._get_expected_collections(days=days_end)
             week_collections = sum(
                 c.get("amount_residual", 0) for c in collections
                 if self.days_between(c.get("invoice_date_due", "")) >= days_start
             )
             
-            # Pagos programados
+            # Pagos programados (con validación)
             payments = self._get_upcoming_payments(days=days_end)
             week_payments = sum(
                 p.get("amount_residual", 0) for p in payments
@@ -837,9 +865,24 @@ _¡Buen fin de semana!_
         return total / 30 if total > 0 else 25000.0  # Default si no hay datos
     
     def _get_upcoming_payments(self, days: int = 7, company_id: int | None = None) -> list[dict]:
-        """Obtiene pagos próximos (facturas de proveedor pendientes)."""
+        """Obtiene pagos próximos (facturas de proveedor pendientes) con introspección."""
         company_id = company_id or self.company_id
         due_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+        
+        # Validar campos antes de consultar
+        fields_to_check = ["partner_id", "amount_residual", "invoice_date_due", "ref", "currency_id"]
+        validation = self.introspection.validate_query("account.move", fields_to_check)
+        
+        if not validation["valid"]:
+            self.logger.warning(
+                f"Algunos campos no existen en account.move: {validation['missing_fields']}. "
+                f"Usando solo campos válidos."
+            )
+            # Usar solo campos válidos
+            fields_to_check = [
+                field for field, valid in validation["fields_valid"].items()
+                if valid
+            ]
         
         return self.search_read(
             "account.move",
@@ -850,16 +893,31 @@ _¡Buen fin de semana!_
                 ("invoice_date_due", "<=", due_date),
                 ("company_id", "=", company_id),
             ],
-            ["partner_id", "amount_residual", "invoice_date_due", "ref", "currency_id"],
+            fields=fields_to_check,
             limit=200,
-            order="invoice_date_due asc"
+            order="invoice_date_due asc",
+            validate=True,  # Validar campos
         )
     
     def _get_expected_collections(self, days: int = 7, company_id: int | None = None) -> list[dict]:
-        """Obtiene cobranza esperada (facturas de cliente por vencer)."""
+        """Obtiene cobranza esperada (facturas de cliente por vencer) con introspección."""
         company_id = company_id or self.company_id
         due_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
         today = datetime.now().strftime("%Y-%m-%d")
+        
+        # Validar campos antes de consultar
+        fields_to_check = ["partner_id", "amount_residual", "invoice_date_due", "currency_id"]
+        validation = self.introspection.validate_query("account.move", fields_to_check)
+        
+        if not validation["valid"]:
+            self.logger.warning(
+                f"Algunos campos no existen en account.move: {validation['missing_fields']}. "
+                f"Usando solo campos válidos."
+            )
+            fields_to_check = [
+                field for field, valid in validation["fields_valid"].items()
+                if valid
+            ]
         
         return self.search_read(
             "account.move",
@@ -871,9 +929,10 @@ _¡Buen fin de semana!_
                 ("invoice_date_due", "<=", due_date),
                 ("company_id", "=", company_id),
             ],
-            ["partner_id", "amount_residual", "invoice_date_due", "currency_id"],
+            fields=fields_to_check,
             limit=200,
-            order="invoice_date_due asc"
+            order="invoice_date_due asc",
+            validate=True,  # Validar campos
         )
     
     # ==================== Planeación Financiera Profesional ====================

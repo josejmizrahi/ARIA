@@ -324,7 +324,7 @@ export default function FinanceDashboard() {
     fetchFinanceData()
     const interval = setInterval(fetchFinanceData, 60000) // Refresh every minute
     return () => clearInterval(interval)
-  }, [])
+  }, [selectedCompany])
   
   useEffect(() => {
     // Cargar lista de compañías

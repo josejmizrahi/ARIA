@@ -581,6 +581,195 @@ async def list_companies():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Agent Messaging ====================
+
+@app.get("/api/agents/messages", tags=["Agent Messaging"])
+async def get_agent_messages(
+    agent_name: Optional[str] = Query(None, description="Filtrar por agente"),
+    message_type: Optional[str] = Query(None, description="Filtrar por tipo"),
+    unread_only: bool = Query(False, description="Solo mensajes no leídos"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Obtiene mensajes entre agentes."""
+    try:
+        from aria.agent_messaging import get_messaging, MessageType
+        
+        messaging = get_messaging()
+        
+        msg_type = None
+        if message_type:
+            try:
+                msg_type = MessageType(message_type)
+            except ValueError:
+                pass
+        
+        messages = messaging.get_messages(
+            agent_name=agent_name,
+            message_type=msg_type,
+            unread_only=unread_only,
+            limit=limit,
+        )
+        
+        return {
+            "messages": [m.model_dump() for m in messages],
+            "total": len(messages),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo mensajes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/messages/{message_id}", tags=["Agent Messaging"])
+async def get_message_conversation(message_id: str):
+    """Obtiene una conversación completa (mensaje + respuestas)."""
+    try:
+        from aria.agent_messaging import get_messaging
+        from uuid import UUID
+        
+        messaging = get_messaging()
+        msg_id = UUID(message_id)
+        
+        conversation = messaging.get_conversation(msg_id)
+        
+        return {
+            "conversation": [m.model_dump() for m in conversation],
+            "message_id": message_id,
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de mensaje inválido")
+    except Exception as e:
+        logger.error(f"Error obteniendo conversación: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/messages/{message_id}/respond", tags=["Agent Messaging"])
+async def respond_to_message(
+    message_id: str,
+    agent_name: str = Query(..., description="Agente que responde"),
+    response: str = Query(..., description="Respuesta"),
+    data: Optional[dict] = None,
+):
+    """Responde a un mensaje de otro agente."""
+    try:
+        from aria.agent_messaging import get_messaging
+        from uuid import UUID
+        
+        messaging = get_messaging()
+        msg_id = UUID(message_id)
+        
+        response_msg = messaging.respond(
+            from_agent=agent_name,
+            to_message_id=msg_id,
+            response=response,
+            data=data or {},
+        )
+        
+        return {
+            "success": True,
+            "response": response_msg.model_dump(),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error respondiendo mensaje: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/conversations", tags=["Agent Messaging"])
+async def list_conversations(
+    agent_name: Optional[str] = Query(None, description="Filtrar por agente"),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Lista todas las conversaciones entre agentes."""
+    try:
+        from aria.agent_messaging import get_messaging
+        
+        messaging = get_messaging()
+        
+        # Obtener mensajes que requieren respuesta o tienen respuestas
+        all_messages = messaging.get_messages(agent_name=agent_name, limit=1000)
+        
+        conversations = []
+        processed_ids = set()
+        
+        for msg in all_messages:
+            if msg.id in processed_ids:
+                continue
+            
+            # Si es un mensaje con respuesta o que requiere respuesta
+            if msg.requires_response or msg.response_to:
+                conversation = messaging.get_conversation(msg.id)
+                if len(conversation) > 1:  # Solo conversaciones con respuestas
+                    conversations.append({
+                        "id": str(msg.id),
+                        "from_agent": msg.from_agent,
+                        "to_agent": msg.to_agent,
+                        "subject": msg.subject,
+                        "message_count": len(conversation),
+                        "last_message": conversation[-1].created_at.isoformat() if conversation else None,
+                        "messages": [m.model_dump() for m in conversation],
+                    })
+                    processed_ids.update(m.id for m in conversation)
+        
+        return {
+            "conversations": conversations[:limit],
+            "total": len(conversations),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo conversaciones: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/learning", tags=["Agent Learning"])
+async def get_agent_learning(
+    agent_name: Optional[str] = Query(None, description="Filtrar por agente"),
+):
+    """Obtiene patrones aprendidos por los agentes."""
+    try:
+        from aria.agent_learning import get_learning
+        
+        learning = get_learning()
+        
+        if agent_name:
+            patterns = learning.patterns.get(agent_name, [])
+        else:
+            patterns = []
+            for agent_patterns in learning.patterns.values():
+                patterns.extend(agent_patterns)
+        
+        return {
+            "patterns": [p.model_dump() for p in patterns],
+            "total": len(patterns),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo aprendizaje: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/learning/learn-from-logs", tags=["Agent Learning"])
+async def learn_from_logs(
+    agent_name: str = Query(..., description="Nombre del agente"),
+):
+    """Fuerza aprendizaje desde logs de un agente."""
+    try:
+        from aria.agent_learning import get_learning
+        from pathlib import Path
+        
+        learning = get_learning()
+        log_file = Path(settings.log_dir) / "aria.log"
+        
+        learning.learn_from_logs(agent_name, log_file)
+        
+        return {
+            "success": True,
+            "message": f"Aprendizaje completado para {agent_name}",
+            "patterns_learned": len(learning.patterns.get(agent_name, [])),
+        }
+    except Exception as e:
+        logger.error(f"Error en aprendizaje desde logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/finance/budgets", tags=["Finance"])
 async def get_budgets():
     """Obtiene presupuestos actuales desde todas las fuentes."""
