@@ -68,15 +68,22 @@ function formatNumber(value) {
 
 // KPI Card Component
 function KPICard({ title, value, subtitle, icon: Icon, status, trend, onClick }) {
+  const handleClick = (e) => {
+    if (onClick) {
+      e.preventDefault()
+      e.stopPropagation()
+      onClick(e)
+    }
+  }
+  
   const Component = onClick ? 'button' : 'div'
   return (
     <Component 
-      onClick={onClick}
+      onClick={handleClick}
       type={onClick ? 'button' : undefined}
-      className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''} ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-all duration-200 text-left w-full border-0 outline-none focus:outline-none' : ''}`}
-      style={onClick ? { pointerEvents: 'auto' } : {}}
+      className={`glass rounded-2xl p-6 animate-fade-in ${status ? STATUS_COLORS[status] : ''} ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-all duration-200 text-left w-full border-0 outline-none focus:outline-none active:scale-[0.98]' : ''}`}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between pointer-events-none">
         <div>
           <p className="text-surface-400 text-sm font-medium mb-1">{title}</p>
           <p className="text-3xl font-bold font-mono tracking-tight">{value}</p>
@@ -91,7 +98,7 @@ function KPICard({ title, value, subtitle, icon: Icon, status, trend, onClick })
         )}
       </div>
       {trend !== undefined && (
-        <div className={`mt-4 flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+        <div className={`mt-4 flex items-center gap-1 text-sm pointer-events-none ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           <TrendingUp className={`w-4 h-4 ${trend < 0 ? 'rotate-180' : ''}`} />
           <span>{Math.abs(trend).toFixed(1)}% vs periodo anterior</span>
         </div>
@@ -105,12 +112,21 @@ function AgentCard({ name, data, onClick }) {
   const Icon = AGENT_ICONS[name] || Activity
   const status = data?.status || 'ok'
   
+  const handleClick = (e) => {
+    if (onClick) {
+      e.preventDefault()
+      e.stopPropagation()
+      onClick(e)
+    }
+  }
+  
   return (
     <button 
-      onClick={onClick}
-      className={`glass rounded-xl p-4 text-left w-full hover:scale-[1.02] transition-all duration-200 animate-slide-up border ${STATUS_COLORS[status]}`}
+      onClick={handleClick}
+      type="button"
+      className={`glass rounded-xl p-4 text-left w-full hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 animate-slide-up border ${STATUS_COLORS[status]} cursor-pointer outline-none focus:outline-none`}
     >
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-3 pointer-events-none">
         <div className={`p-2 rounded-lg ${status === 'ok' ? 'bg-emerald-500/20' : status === 'warning' ? 'bg-amber-500/20' : 'bg-red-500/20'}`}>
           <Icon className="w-5 h-5" />
         </div>
@@ -122,7 +138,7 @@ function AgentCard({ name, data, onClick }) {
       </div>
       
       {data && (
-        <div className="space-y-2 text-sm">
+        <div className="space-y-2 text-sm pointer-events-none">
           {data.cash_balance !== undefined && (
             <div className="flex justify-between">
               <span className="text-surface-400">Saldo</span>
@@ -187,14 +203,24 @@ function ProposalCard({ proposal, onApprove, onReject }) {
         </div>
         <div className="flex gap-2 shrink-0">
           <button 
-            onClick={() => onApprove(proposal.id)}
-            className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onApprove(proposal.id)
+            }}
+            type="button"
+            className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors cursor-pointer"
           >
             <CheckCircle2 className="w-5 h-5" />
           </button>
           <button 
-            onClick={() => onReject(proposal.id)}
-            className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onReject(proposal.id)
+            }}
+            type="button"
+            className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
           >
             <AlertTriangle className="w-5 h-5" />
           </button>
@@ -268,7 +294,11 @@ export default function App() {
     return () => clearInterval(interval)
   }, [fetchData, selectedCompany])
   
-  const handleApprove = async (id) => {
+  const handleApprove = async (id, e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     try {
       await fetch(`${API_BASE}/proposals/${id}/approve`, { method: 'POST' })
       fetchData()
@@ -277,7 +307,11 @@ export default function App() {
     }
   }
   
-  const handleReject = async (id) => {
+  const handleReject = async (id, e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     try {
       await fetch(`${API_BASE}/proposals/${id}/reject`, { method: 'POST' })
       fetchData()
@@ -305,8 +339,13 @@ export default function App() {
           <h2 className="text-xl font-bold mb-2">Error de conexión</h2>
           <p className="text-surface-400 mb-4">{error}</p>
           <button 
-            onClick={fetchData}
-            className="px-6 py-2 bg-aria-600 rounded-lg hover:bg-aria-700 transition-colors"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              fetchData()
+            }}
+            type="button"
+            className="px-6 py-2 bg-aria-600 rounded-lg hover:bg-aria-700 transition-colors cursor-pointer"
           >
             Reintentar
           </button>
@@ -337,8 +376,13 @@ export default function App() {
                 </div>
               </div>
               <button 
-                onClick={() => setShowConversations(false)}
-                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowConversations(false)
+                }}
+                type="button"
+                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors cursor-pointer"
               >
                 Volver al Dashboard
               </button>
@@ -369,8 +413,13 @@ export default function App() {
                 </div>
               </div>
               <button 
-                onClick={() => setShowFinanceDashboard(false)}
-                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowFinanceDashboard(false)
+                }}
+                type="button"
+                className="px-4 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors cursor-pointer"
               >
                 Volver al Dashboard
               </button>
@@ -415,8 +464,13 @@ export default function App() {
                 </select>
               )}
               <button
-                onClick={() => setShowConversations(true)}
-                className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowConversations(true)
+                }}
+                type="button"
+                className="px-4 py-2 bg-surface-800 hover:bg-surface-700 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
                 title="Ver conversaciones entre agentes"
               >
                 <MessageSquare className="w-4 h-4" />
@@ -429,8 +483,13 @@ export default function App() {
                 </span>
               )}
               <button 
-                onClick={fetchData}
-                className="p-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  fetchData()
+                }}
+                type="button"
+                className="p-2 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-5 h-5" />
               </button>
@@ -481,7 +540,11 @@ export default function App() {
               subtitle={`Runway: ${Math.round(dashboard?.agents?.finanzas?.runway_days || 0)} días • Click para ver análisis completo`}
               icon={Wallet}
               status={dashboard?.agents?.finanzas?.status}
-              onClick={() => setShowFinanceDashboard(true)}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowFinanceDashboard(true)
+              }}
             />
             <KPICard
               title="CxC Vencidas"
@@ -507,7 +570,9 @@ export default function App() {
                   <AgentCard 
                     name={name} 
                     data={data}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       if (name === 'finanzas') {
                         setShowFinanceDashboard(true)
                       } else {
