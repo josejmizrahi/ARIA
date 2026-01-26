@@ -314,21 +314,59 @@ class BudgetManager:
             # Verificar si account.account tiene company_id antes de filtrar
             from aria.agent_introspection import get_introspection
             introspection = get_introspection(odoo_client)
-            account_model = introspection.get_model("account.account")
+            
+            # Verificar si el modelo existe primero
+            try:
+                account_model = introspection.get_model("account.account")
+                if not account_model.exists():
+                    logger.debug("Modelo account.account no existe, saltando gastos por categoría")
+                    continue
+            except Exception as e:
+                logger.debug(f"Error verificando modelo account.account: {e}, saltando gastos por categoría")
+                continue
             
             # Construir dominio sin company_id si el campo no existe
             domain = [
                 ("account_type", "in", ["expense", "expense_depreciation", "expense_direct_cost"]),
             ]
-            if account_model.field_exists("company_id"):
-                domain.append(("company_id", "=", self.company_id))
             
-            expense_accounts = odoo_client.search_read(
-                "account.account",
-                domain,
-                ["id", "name"],
-                limit=50
-            )
+            # Verificar si el campo company_id existe antes de agregarlo
+            try:
+                if account_model.field_exists("company_id"):
+                    domain.append(("company_id", "=", self.company_id))
+            except Exception as e:
+                logger.debug(f"Error verificando campo company_id en account.account: {e}, continuando sin filtro")
+            
+            # Intentar consulta con manejo de errores
+            try:
+                expense_accounts = odoo_client.search_read(
+                    "account.account",
+                    domain,
+                    ["id", "name"],
+                    limit=50
+                )
+            except Exception as e:
+                error_str = str(e).lower()
+                if "invalid field" in error_str and "company_id" in error_str:
+                    # Reintentar sin company_id
+                    logger.debug("Campo company_id no existe en account.account, reintentando sin filtro")
+                    domain_without_company = [
+                        d for d in domain 
+                        if not (isinstance(d, (list, tuple)) and len(d) >= 2 and d[0] == "company_id")
+                    ]
+                    try:
+                        expense_accounts = odoo_client.search_read(
+                            "account.account",
+                            domain_without_company,
+                            ["id", "name"],
+                            limit=50
+                        )
+                    except Exception as e2:
+                        logger.error(f"Error obteniendo cuentas de gastos: {e2}")
+                        continue
+                else:
+                    logger.error(f"Error obteniendo cuentas de gastos: {e}")
+                    continue
             
             for account in expense_accounts:
                 account_id = account["id"]

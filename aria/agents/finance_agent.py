@@ -952,15 +952,20 @@ _¡Buen fin de semana!_
         validation = self.introspection.validate_query("account.move", fields_to_check)
         
         if not validation["valid"]:
-            self.logger.warning(
-                f"Algunos campos no existen en account.move: {validation['missing_fields']}. "
-                f"Usando solo campos válidos."
-            )
+            missing_fields = validation.get("missing_fields", [])
+            if missing_fields:  # Solo loguear si hay campos faltantes
+                self.logger.warning(
+                    f"Algunos campos no existen en account.move: {missing_fields}. "
+                    f"Usando solo campos válidos."
+                )
             # Usar solo campos válidos
             fields_to_check = [
-                field for field, valid in validation["fields_valid"].items()
+                field for field, valid in validation.get("fields_valid", {}).items()
                 if valid
             ]
+            # Si no hay campos válidos, usar campos básicos por defecto
+            if not fields_to_check:
+                fields_to_check = ["partner_id", "amount_residual", "invoice_date_due"]
         
         return self.search_read(
             "account.move",
