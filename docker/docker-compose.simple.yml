@@ -1,0 +1,56 @@
+version: '3.8'
+
+# ARIA - Configuración Simple (sin build, solo servicios básicos)
+# ================================================================
+# 
+# Uso:
+#   cd docker
+#   docker-compose -f docker-compose.simple.yml up -d
+#
+# Requisitos:
+#   - Tener las imágenes construidas primero:
+#     ./scripts/build-docker.sh
+
+services:
+  # Redis para almacenamiento de propuestas
+  redis:
+    image: redis:7-alpine
+    container_name: aria-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # API de ARIA (requiere imagen construida)
+  api:
+    image: aria-api:latest
+    container_name: aria-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ARIA_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ../.env
+    volumes:
+      - ../logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Dashboard de ARIA (requiere imagen construida)
+  dashboard:
+    image: aria-dashboard:latest
+    container_name: aria-dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  redis-data:

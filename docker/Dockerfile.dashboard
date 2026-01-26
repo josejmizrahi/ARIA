@@ -2,11 +2,11 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Copiar archivos de dependencias primero (para cache de Docker)
 COPY package*.json ./
 
 # Instalar dependencias
-RUN npm ci
+RUN npm ci --legacy-peer-deps || npm install
 
 # Copiar código fuente
 COPY . .
