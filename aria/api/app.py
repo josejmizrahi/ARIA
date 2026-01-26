@@ -681,13 +681,23 @@ async def list_companies():
             for c in companies
         ]
         
-        # Ordenar para que la empresa con ID=1 aparezca primero si existe
-        companies_list.sort(key=lambda x: (x["id"] != 1, x["id"]))
+        # Filtrar para mostrar solo la empresa con ID=1 (Quimibond)
+        # Si existe, retornar solo esa; si no, retornar todas ordenadas
+        company_id_1 = [c for c in companies_list if c["id"] == 1]
         
-        return {
-            "companies": companies_list,
-            "total": len(companies_list),
-        }
+        if company_id_1:
+            # Solo retornar la empresa con ID=1
+            return {
+                "companies": company_id_1,
+                "total": 1,
+            }
+        else:
+            # Si no existe ID=1, ordenar para que aparezca primero si existe
+            companies_list.sort(key=lambda x: (x["id"] != 1, x["id"]))
+            return {
+                "companies": companies_list,
+                "total": len(companies_list),
+            }
     except Exception as e:
         logger.error(f"Error obteniendo compañías: {e}")
         raise HTTPException(status_code=500, detail=str(e))

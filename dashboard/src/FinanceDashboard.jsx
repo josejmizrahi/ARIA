@@ -395,13 +395,20 @@ export default function FinanceDashboard() {
                 <SelectValue placeholder="Seleccionar empresa" />
               </SelectTrigger>
               <SelectContent>
-                {companies.map(comp => (
-                  <SelectItem key={comp.id} value={comp.id.toString()}>
-                    {comp.name} ({comp.currency})
-                  </SelectItem>
-                ))}
+                {companies
+                  .filter(comp => comp.id === 1) // Solo mostrar empresa con ID=1
+                  .map(comp => (
+                    <SelectItem key={comp.id} value={comp.id.toString()}>
+                      {comp.name} ({comp.currency})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
+          )}
+          {companies.length === 1 && companies[0].id === 1 && (
+            <div className="text-sm text-muted-foreground">
+              {companies[0].name} ({companies[0].currency})
+            </div>
           )}
           <Button variant="outline" onClick={() => setShowBudgetConfig(!showBudgetConfig)}>
             <Settings className="w-4 h-4 mr-2" />
