@@ -1,0 +1,223 @@
+{
+  "timestamp": "2026-01-21T17:31:41.582289",
+  "odoo_url": "https://quimibond.odoo.com",
+  "odoo_db": "quimibond",
+  "models": {
+    "ok": [
+      {
+        "model": "account.account",
+        "fields_count": 79,
+        "agents": [
+          "finance_agent"
+        ]
+      },
+      {
+        "model": "account.journal",
+        "fields_count": 112,
+        "agents": [
+          "accounting_agent"
+        ]
+      },
+      {
+        "model": "account.move",
+        "fields_count": 323,
+        "agents": [
+          "accounting_agent",
+          "ceo_agent",
+          "finance_agent",
+          "receivables_agent",
+          "sales_agent"
+        ]
+      },
+      {
+        "model": "account.move.line",
+        "fields_count": 140,
+        "agents": [
+          "finance_agent"
+        ]
+      },
+      {
+        "model": "account.payment",
+        "fields_count": 108,
+        "agents": [
+          "finance_agent"
+        ]
+      },
+      {
+        "model": "hr.appraisal",
+        "fields_count": 75,
+        "agents": [
+          "hr_agent"
+        ]
+      },
+      {
+        "model": "hr.attendance",
+        "fields_count": 48,
+        "agents": [
+          "hr_agent"
+        ]
+      },
+      {
+        "model": "hr.employee",
+        "fields_count": 342,
+        "agents": [
+          "hr_agent"
+        ]
+      },
+      {
+        "model": "hr.leave",
+        "fields_count": 87,
+        "agents": [
+          "hr_agent"
+        ]
+      },
+      {
+        "model": "maintenance.request",
+        "fields_count": 71,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "mrp.bom",
+        "fields_count": 63,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "mrp.production",
+        "fields_count": 174,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "mrp.routing.workcenter",
+        "fields_count": 58,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "mrp.workcenter",
+        "fields_count": 86,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "mrp.workorder",
+        "fields_count": 91,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "product.product",
+        "fields_count": 297,
+        "agents": [
+          "inventory_agent",
+          "system_agent"
+        ]
+      },
+      {
+        "model": "product.template",
+        "fields_count": 225,
+        "agents": [
+          "inventory_agent"
+        ]
+      },
+      {
+        "model": "purchase.order",
+        "fields_count": 113,
+        "agents": [
+          "purchase_agent"
+        ]
+      },
+      {
+        "model": "res.company",
+        "fields_count": 352,
+        "agents": [
+          "base"
+        ]
+      },
+      {
+        "model": "res.partner",
+        "fields_count": 319,
+        "agents": [
+          "receivables_agent",
+          "sales_agent",
+          "system_agent"
+        ]
+      },
+      {
+        "model": "res.users",
+        "fields_count": 449,
+        "agents": [
+          "system_agent"
+        ]
+      },
+      {
+        "model": "sale.order",
+        "fields_count": 247,
+        "agents": [
+          "sales_agent"
+        ]
+      },
+      {
+        "model": "stock.lot",
+        "fields_count": 62,
+        "agents": [
+          "inventory_agent"
+        ]
+      },
+      {
+        "model": "stock.move",
+        "fields_count": 140,
+        "agents": [
+          "inventory_agent"
+        ]
+      },
+      {
+        "model": "stock.picking",
+        "fields_count": 164,
+        "agents": [
+          "purchase_agent"
+        ]
+      },
+      {
+        "model": "stock.scrap",
+        "fields_count": 45,
+        "agents": [
+          "manufacturing_agent"
+        ]
+      },
+      {
+        "model": "stock.warehouse.orderpoint",
+        "fields_count": 50,
+        "agents": [
+          "purchase_agent"
+        ]
+      }
+    ],
+    "missing_fields": [],
+    "not_found": [
+      {
+        "model": "hr.contract",
+        "error": "Error en hr.contract.fields_get: <Fault 2: \"Object hr.contract doesn't exist\">",
+        "module": "hr_contract",
+        "required": false,
+        "agents": [
+          "hr_agent"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "total_models": 28,
+    "ok": 27,
+    "warnings": 1,
+    "errors": 0
+  }
+}

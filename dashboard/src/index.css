@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-critical: #ef4444;
+  --color-warning: #f59e0b;
+  --color-ok: #22c55e;
+  --color-info: #3b82f6;
+}
+
+body {
+  @apply bg-surface-950 text-surface-100 antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-surface-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-surface-600;
+}
+
+/* Status indicators */
+.status-critical { @apply bg-red-500/20 text-red-400 border-red-500/30; }
+.status-warning { @apply bg-amber-500/20 text-amber-400 border-amber-500/30; }
+.status-ok { @apply bg-emerald-500/20 text-emerald-400 border-emerald-500/30; }
+.status-info { @apply bg-blue-500/20 text-blue-400 border-blue-500/30; }
+
+/* Glassmorphism */
+.glass {
+  @apply bg-surface-900/60 backdrop-blur-xl border border-surface-800/50;
+}
+
+/* Glow effects */
+.glow-critical { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+.glow-warning { box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
+.glow-ok { box-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
+
+/* Animation stagger */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }

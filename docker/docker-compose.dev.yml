@@ -1,0 +1,46 @@
+version: '3.8'
+
+# ARIA - Servicios de desarrollo
+# ===============================
+# 
+# Uso:
+#   cd docker
+#   docker-compose -f docker-compose.dev.yml up -d
+#
+# Verificar:
+#   docker-compose -f docker-compose.dev.yml ps
+#   docker-compose -f docker-compose.dev.yml logs -f redis
+
+services:
+  # Redis para almacenamiento de propuestas
+  redis:
+    image: redis:7-alpine
+    container_name: aria-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Commander (UI opcional para debug)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: aria-redis-ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - debug
+
+volumes:
+  redis-data:
+    name: aria-redis-data

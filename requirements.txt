@@ -1,0 +1,79 @@
+# ARIA - Dependencias principales
+# ================================
+
+# CLI Framework
+typer[all]>=0.9.0
+
+# Configuración y validación
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# HTTP Client (para Odoo XML-RPC/JSON-RPC)
+httpx>=0.25.0
+
+# Retry logic
+tenacity>=8.2.0
+
+# Logging y UI
+rich>=13.7.0
+structlog>=23.2.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# =================================
+# Fase 1: Notificaciones y Aprobaciones
+# =================================
+
+# Async HTTP
+aiohttp>=3.9.0
+
+# Redis (almacenamiento de propuestas)
+redis>=5.0.0
+
+# Telegram Bot
+aiogram>=3.4.0
+
+# Email async
+aiosmtplib>=3.0.0
+
+# =================================
+# Fase 2: Agentes y Scheduler
+# =================================
+
+# Task Scheduler
+apscheduler>=3.10.0
+
+# Cron expressions
+croniter>=2.0.0
+
+# =================================
+# Fase 3: API REST
+# =================================
+
+# FastAPI
+fastapi>=0.109.0
+
+# ASGI Server
+uvicorn[standard]>=0.27.0
+
+# WebSocket support (included in uvicorn[standard])
+websockets>=12.0
+
+# =================================
+# Fase 4: Reportes PDF
+# =================================
+
+# Template engine
+jinja2>=3.1.0
+
+# PDF generation
+weasyprint>=60.0
+
+# =================================
+# Desarrollo (opcional)
+# =================================
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# ruff>=0.1.0
+# mypy>=1.7.0

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Reporte de Inventario</title>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Reporte de Inventario</h1>
+            <p class="text-muted">Valorización y Análisis</p>
+        </div>
+        <div class="report-info">
+            <p><strong>Fecha:</strong> {{ generated_at | datetime }}</p>
+            <p><strong>Empresa:</strong> {{ company_name }}</p>
+        </div>
+    </div>
+    
+    <div class="summary-box">
+        <div class="kpi">
+            <div class="kpi-value">{{ total_value | currency }}</div>
+            <div class="kpi-label">Valor Total</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{ total_products | number }}</div>
+            <div class="kpi-label">Productos</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{ total_units | number }}</div>
+            <div class="kpi-label">Unidades</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value text-danger">{{ slow_moving_value | currency }}</div>
+            <div class="kpi-label">Slow Moving</div>
+        </div>
+    </div>
+    
+    {% if by_category %}
+    <h2>Valorización por Categoría</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Categoría</th>
+                <th class="text-right">Productos</th>
+                <th class="text-right">Unidades</th>
+                <th class="text-right">Valor</th>
+                <th class="text-right">%</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat in by_category %}
+            <tr>
+                <td>{{ cat.name }}</td>
+                <td class="text-right">{{ cat.products }}</td>
+                <td class="text-right">{{ cat.units | number }}</td>
+                <td class="amount">{{ cat.value | currency }}</td>
+                <td class="text-right">{{ cat.percentage | percentage }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td class="text-right"><strong>{{ total_products }}</strong></td>
+                <td class="text-right"><strong>{{ total_units | number }}</strong></td>
+                <td class="amount"><strong>{{ total_value | currency }}</strong></td>
+                <td class="text-right"><strong>100%</strong></td>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if abc %}
+    <h2>Análisis ABC</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Clasificación</th>
+                <th>Descripción</th>
+                <th class="text-right">Productos</th>
+                <th class="text-right">% Productos</th>
+                <th class="text-right">% Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>A</strong></td>
+                <td>Alta rotación</td>
+                <td class="text-right">{{ abc.a_count }}</td>
+                <td class="text-right">{{ abc.a_product_pct | percentage }}</td>
+                <td class="text-right">80%</td>
+            </tr>
+            <tr>
+                <td><strong>B</strong></td>
+                <td>Rotación media</td>
+                <td class="text-right">{{ abc.b_count }}</td>
+                <td class="text-right">{{ abc.b_product_pct | percentage }}</td>
+                <td class="text-right">15%</td>
+            </tr>
+            <tr>
+                <td><strong>C</strong></td>
+                <td>Baja rotación</td>
+                <td class="text-right">{{ abc.c_count }}</td>
+                <td class="text-right">{{ abc.c_product_pct | percentage }}</td>
+                <td class="text-right">5%</td>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if critical_items %}
+    <h2>Productos Críticos</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th>Situación</th>
+                <th class="text-right">Stock</th>
+                <th class="text-right">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in critical_items %}
+            <tr>
+                <td>{{ item.code }}</td>
+                <td>{{ item.name }}</td>
+                <td class="{% if item.situation == 'negative' %}text-danger{% elif item.situation == 'overstock' %}text-warning{% endif %}">
+                    {{ item.situation_label }}
+                </td>
+                <td class="text-right">{{ item.qty | number }}</td>
+                <td class="amount">{{ item.value | currency }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if slow_moving_items %}
+    <div class="page-break"></div>
+    <h2>Productos Sin Movimiento (Slow Moving)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Producto</th>
+                <th class="text-right">Stock</th>
+                <th class="text-right">Días sin mov.</th>
+                <th class="text-right">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in slow_moving_items %}
+            <tr>
+                <td>{{ item.code }}</td>
+                <td>{{ item.name }}</td>
+                <td class="text-right">{{ item.qty | number }}</td>
+                <td class="text-right text-warning">{{ item.days_without_movement }}</td>
+                <td class="amount">{{ item.value | currency }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    <div class="footer" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+        <p class="text-muted text-center">
+            Generado automáticamente por ARIA el {{ generated_at | datetime }}
+        </p>
+    </div>
+</body>
+</html>

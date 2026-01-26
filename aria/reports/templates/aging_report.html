@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Reporte de Antigüedad de Saldos</title>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Reporte de Antigüedad de Saldos</h1>
+            <p class="text-muted">Cuentas por Cobrar</p>
+        </div>
+        <div class="report-info">
+            <p><strong>Fecha:</strong> {{ generated_at | datetime }}</p>
+            <p><strong>Empresa:</strong> {{ company_name }}</p>
+        </div>
+    </div>
+    
+    <div class="summary-box">
+        <div class="kpi">
+            <div class="kpi-value">{{ total | currency }}</div>
+            <div class="kpi-label">Total Cartera</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value text-danger">{{ overdue_total | currency }}</div>
+            <div class="kpi-label">Total Vencido</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{ overdue_percentage | percentage }}</div>
+            <div class="kpi-label">% Vencido</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{ customer_count }}</div>
+            <div class="kpi-label">Clientes</div>
+        </div>
+    </div>
+    
+    <h2>Resumen por Antigüedad</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Período</th>
+                <th class="text-right">Monto</th>
+                <th class="text-right">%</th>
+                <th class="text-right">Facturas</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bucket in aging_buckets %}
+            <tr>
+                <td>{{ bucket.name }}</td>
+                <td class="amount">{{ bucket.amount | currency }}</td>
+                <td class="text-right">{{ bucket.percentage | percentage }}</td>
+                <td class="text-right">{{ bucket.count }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td class="amount"><strong>{{ total | currency }}</strong></td>
+                <td class="text-right"><strong>100%</strong></td>
+                <td class="text-right"><strong>{{ total_invoices }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    {% if customers %}
+    <div class="page-break"></div>
+    
+    <h2>Detalle por Cliente</h2>
+    {% for customer in customers %}
+    <div class="no-break">
+        <h3>{{ customer.name }}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Factura</th>
+                    <th>Fecha</th>
+                    <th>Vencimiento</th>
+                    <th>Días</th>
+                    <th class="text-right">Saldo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in customer.invoices %}
+                <tr>
+                    <td>{{ invoice.name }}</td>
+                    <td>{{ invoice.date | date }}</td>
+                    <td>{{ invoice.due_date | date }}</td>
+                    <td class="{% if invoice.days_overdue > 0 %}text-danger{% endif %}">
+                        {{ invoice.days_overdue }}
+                    </td>
+                    <td class="amount">{{ invoice.amount | currency }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="4"><strong>Total {{ customer.name }}</strong></td>
+                    <td class="amount"><strong>{{ customer.total | currency }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% endif %}
+    
+    <div class="footer" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+        <p class="text-muted text-center">
+            Este reporte fue generado automáticamente por ARIA el {{ generated_at | datetime }}
+        </p>
+    </div>
+</body>
+</html>
