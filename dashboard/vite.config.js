@@ -10,17 +10,18 @@ export default defineConfig({
     },
   },
   server: {
+    host: process.env.VITE_HOST || '0.0.0.0', // Escuchar en todas las interfaces para acceso remoto
     port: 5173,
     headers: {
       'Cache-Control': 'no-store',
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: (process.env.VITE_API_URL || 'http://localhost:8000').replace('http', 'ws'),
         ws: true,
       },
     },
