@@ -667,19 +667,26 @@ async def list_companies():
             "res.company",
             [],
             ["id", "name", "currency_id"],
-            limit=100
+            limit=100,
+            order="id"
         )
         
+        # Convertir a lista de diccionarios
+        companies_list = [
+            {
+                "id": c["id"],
+                "name": c.get("name", f"Company {c['id']}"),
+                "currency": c.get("currency_id", [0, "MXN"])[1] if c.get("currency_id") else "MXN",
+            }
+            for c in companies
+        ]
+        
+        # Ordenar para que la empresa con ID=1 aparezca primero si existe
+        companies_list.sort(key=lambda x: (x["id"] != 1, x["id"]))
+        
         return {
-            "companies": [
-                {
-                    "id": c["id"],
-                    "name": c.get("name", f"Company {c['id']}"),
-                    "currency": c.get("currency_id", [0, "MXN"])[1] if c.get("currency_id") else "MXN",
-                }
-                for c in companies
-            ],
-            "total": len(companies),
+            "companies": companies_list,
+            "total": len(companies_list),
         }
     except Exception as e:
         logger.error(f"Error obteniendo compañías: {e}")

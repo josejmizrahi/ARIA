@@ -263,11 +263,25 @@ export default function FinanceDashboard() {
     fetch(`${API_BASE}/companies`)
       .then(res => res.json())
       .then(data => {
-        setCompanies(data.companies || [])
-        if (data.companies && data.companies.length > 0 && !selectedCompany) {
-          // Buscar company_id = 1 primero, si no existe usar la primera disponible
-          const companyId1 = data.companies.find(c => c.id === 1)
-          setSelectedCompany(companyId1 ? 1 : data.companies[0].id)
+        const companies = data.companies || []
+        setCompanies(companies)
+        
+        if (companies.length > 0) {
+          // Buscar company_id = 1 primero (comparar como número y string)
+          const companyId1 = companies.find(c => {
+            const id = parseInt(c.id)
+            return id === 1
+          })
+          
+          if (companyId1) {
+            console.log('✅ Seleccionando empresa por defecto:', companyId1.name, 'ID:', companyId1.id)
+            setSelectedCompany(parseInt(companyId1.id))
+          } else {
+            // Si no existe id=1, usar la primera disponible
+            console.warn('⚠️ No se encontró empresa con ID=1. Empresas disponibles:', companies.map(c => `${c.name} (ID: ${c.id})`))
+            console.log('Usando primera disponible:', companies[0].name, 'ID:', companies[0].id)
+            setSelectedCompany(parseInt(companies[0].id))
+          }
         }
       })
       .catch(err => console.error('Error cargando compañías:', err))
